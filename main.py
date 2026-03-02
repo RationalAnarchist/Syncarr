@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 import os
 from utils.scanner import scan_configs
+from utils.backup import create_backup
 from services.prowlarr import add_app_to_prowlarr
 from services.servarr_clients import add_download_client, build_qbittorrent_payload, build_nzbget_payload
 import httpx
@@ -34,6 +35,29 @@ def discover_apps():
     """
     discovered_apps = scan_configs(TEST_CONFIGS_DIR)
     return JSONResponse(content={"status": "success", "data": discovered_apps})
+
+@app.post("/api/backup")
+def backup_apps():
+    """
+    Endpoint to trigger backup of config and db files for all discovered apps.
+    """
+    try:
+        discovered_apps = scan_configs(TEST_CONFIGS_DIR)
+
+        if not discovered_apps:
+            raise HTTPException(status_code=400, detail="No configurations found to backup.")
+
+        backups_dir = os.path.join(os.path.dirname(__file__), "backups")
+
+        backup_file = create_backup(discovered_apps, backups_dir)
+
+        return JSONResponse(content={
+            "status": "success",
+            "message": "Backup created successfully",
+            "file": os.path.basename(backup_file)
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/link/prowlarr")
 async def link_prowlarr():
