@@ -54,10 +54,16 @@
         <!-- Header -->
         <header class="h-16 flex items-center px-6 border-b border-servarrBorder bg-servarrBg">
             <h2 class="text-lg font-semibold text-gray-200">System Discovery</h2>
-            <button onclick="discoverApps()" class="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                Scan Now
-            </button>
+            <div class="ml-auto flex space-x-3">
+                <button onclick="triggerBackup()" id="backupBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Backup All
+                </button>
+                <button onclick="discoverApps()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Scan Now
+                </button>
+            </div>
         </header>
 
         <!-- Content Area -->
@@ -84,7 +90,73 @@
         </div>
     </main>
 
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <div class="bg-servarrCard border-l-4 border-servarrCyan text-white p-4 rounded shadow-lg flex items-center">
+            <svg class="w-6 h-6 text-servarrCyan mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <div>
+                <h4 class="font-bold text-sm" id="toastTitle">Success</h4>
+                <p class="text-sm text-gray-400" id="toastMessage">Action completed successfully.</p>
+            </div>
+        </div>
+    </div>
+
     <script>
+        function showToast(title, message, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastMessage = document.getElementById('toastMessage');
+            const borderClass = isError ? 'border-red-500' : 'border-servarrCyan';
+            const iconColorClass = isError ? 'text-red-500' : 'text-servarrCyan';
+            const iconSvg = isError
+                ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>'
+                : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>';
+
+            toast.innerHTML = `
+                <div class="bg-servarrCard border-l-4 ${borderClass} text-white p-4 rounded shadow-lg flex items-center">
+                    <svg class="w-6 h-6 ${iconColorClass} mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">${iconSvg}</svg>
+                    <div>
+                        <h4 class="font-bold text-sm">${title}</h4>
+                        <p class="text-sm text-gray-400">${message}</p>
+                    </div>
+                </div>
+            `;
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        async function triggerBackup() {
+            const backupBtn = document.getElementById('backupBtn');
+            const originalContent = backupBtn.innerHTML;
+            backupBtn.disabled = true;
+            backupBtn.innerHTML = `
+                <svg class="animate-spin h-4 w-4 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Backing up...
+            `;
+
+            try {
+                const response = await fetch('/api/backup', { method: 'POST' });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to create backup.');
+                }
+
+                showToast('Backup Successful', `Saved as: ${data.file}`);
+            } catch (err) {
+                showToast('Backup Failed', err.message, true);
+            } finally {
+                backupBtn.disabled = false;
+                backupBtn.innerHTML = originalContent;
+            }
+        }
+
         const getAppColor = (appName) => {
             const lowerName = appName.toLowerCase();
             if (lowerName.includes('sonarr')) return 'bg-cyan-500';
