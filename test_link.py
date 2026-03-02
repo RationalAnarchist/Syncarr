@@ -55,6 +55,35 @@ def test_link_downloaders():
         # Expected to be called 4 times: (Sonarr qbit, Sonarr nzbget, Radarr qbit, Radarr nzbget)
         assert mock_add_client.call_count == 4
 
+def test_link_overseerr():
+    mock_configs = [
+        {"app": "Sonarr", "apiKey": "test_sonarr_key", "port": "8989", "urlBase": "/sonarr"},
+        {"app": "Radarr", "apiKey": "test_radarr_key", "port": "7878", "urlBase": "/radarr"}
+    ]
+
+    with mock.patch('main.scan_configs', return_value=mock_configs):
+        with mock.patch('main.add_radarr_to_overseerr', new_callable=mock.AsyncMock) as mock_add_radarr, \
+             mock.patch('main.add_sonarr_to_overseerr', new_callable=mock.AsyncMock) as mock_add_sonarr, \
+             mock.patch('main.sync_overseerr_profiles', new_callable=mock.AsyncMock) as mock_sync:
+
+            mock_add_radarr.return_value = {"id": 1, "name": "Radarr"}
+            mock_add_sonarr.return_value = {"id": 2, "name": "Sonarr"}
+            mock_sync.return_value = {"success": True}
+
+            payload = {
+                "api_key": "overseerr_test_key",
+                "port": 5055
+            }
+
+            response = client.post("/api/link/overseerr", json=payload)
+            print(response.json())
+
+            assert response.status_code == 200
+            assert mock_add_radarr.call_count == 1
+            assert mock_add_sonarr.call_count == 1
+            assert mock_sync.call_count == 2
+
 if __name__ == "__main__":
     test_link_prowlarr()
     test_link_downloaders()
+    test_link_overseerr()

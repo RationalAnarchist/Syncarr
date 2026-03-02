@@ -7,6 +7,7 @@ from utils.scanner import scan_configs
 from utils.backup import create_backup
 from services.prowlarr import add_app_to_prowlarr
 from services.servarr_clients import add_download_client, build_qbittorrent_payload, build_nzbget_payload
+from services.overseerr import add_radarr_to_overseerr, add_sonarr_to_overseerr, sync_overseerr_profiles
 import httpx
 from pydantic import BaseModel
 from typing import Optional
@@ -23,6 +24,10 @@ class ClientConfig(BaseModel):
 class LinkDownloadersRequest(BaseModel):
     qbittorrent: Optional[ClientConfig] = None
     nzbget: Optional[ClientConfig] = None
+
+class LinkOverseerrRequest(BaseModel):
+    api_key: str
+    port: int = 5055
 
 
 # Hardcoded test path as per requirements
@@ -100,6 +105,54 @@ async def link_prowlarr():
                     app_api_key=app_api_key,
                     sync_level="fullSync"
                 )
+                results.append({"app": app_name, "status": "success", "result": result})
+            except httpx.HTTPStatusError as e:
+                errors.append({"app": app_name, "status": "error", "message": f"HTTP Error: {e.response.status_code} - {e.response.text}"})
+            except Exception as e:
+                errors.append({"app": app_name, "status": "error", "message": str(e)})
+
+    return JSONResponse(content={
+        "status": "success" if not errors else "partial_success" if results else "error",
+        "results": results,
+        "errors": errors
+    })
+
+@app.post("/api/link/overseerr")
+async def link_overseerr(request: LinkOverseerrRequest):
+    """
+    Endpoint to automatically connect Sonarr and Radarr to Overseerr.
+    """
+    discovered_apps = scan_configs(TEST_CONFIGS_DIR)
+
+    results = []
+    errors = []
+
+    overseerr_url = f"http://localhost:{request.port}"
+
+    for app in discovered_apps:
+        app_name = app['app'].lower()
+        if app_name in ['sonarr', 'radarr']:
+            payload = {
+                "name": app['app'],
+                "hostname": "localhost",
+                "port": int(app['port']),
+                "apiKey": app['apiKey'],
+                "useSsl": False,
+                "baseUrl": app.get('urlBase', '') or ""
+            }
+
+            try:
+                if app_name == 'radarr':
+                    result = await add_radarr_to_overseerr(overseerr_url, request.api_key, payload)
+                else:
+                    result = await add_sonarr_to_overseerr(overseerr_url, request.api_key, payload)
+
+                server_id = result.get('id')
+
+                # trigger sync
+                if server_id:
+                    await sync_overseerr_profiles(overseerr_url, request.api_key, app_name, server_id)
+
                 results.append({"app": app_name, "status": "success", "result": result})
             except httpx.HTTPStatusError as e:
                 errors.append({"app": app_name, "status": "error", "message": f"HTTP Error: {e.response.status_code} - {e.response.text}"})
