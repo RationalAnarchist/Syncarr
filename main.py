@@ -30,15 +30,15 @@ class LinkOverseerrRequest(BaseModel):
     port: int = 5055
 
 
-# Hardcoded test path as per requirements
-TEST_CONFIGS_DIR = os.path.join(os.path.dirname(__file__), "test_configs")
+# Allow overriding the config directory via environment variable
+CONFIGS_DIR = os.environ.get("SYNCARR_CONFIG_DIR", os.path.join(os.path.dirname(__file__), "test_configs"))
 
 @app.get("/api/discover")
 def discover_apps():
     """
-    Endpoint to trigger the scan on the test_configs path and return the discovered apps.
+    Endpoint to trigger the scan on the config path and return the discovered apps.
     """
-    discovered_apps = scan_configs(TEST_CONFIGS_DIR)
+    discovered_apps = scan_configs(CONFIGS_DIR)
     return JSONResponse(content={"status": "success", "data": discovered_apps})
 
 @app.post("/api/backup")
@@ -47,7 +47,7 @@ def backup_apps():
     Endpoint to trigger backup of config and db files for all discovered apps.
     """
     try:
-        discovered_apps = scan_configs(TEST_CONFIGS_DIR)
+        discovered_apps = scan_configs(CONFIGS_DIR)
 
         if not discovered_apps:
             raise HTTPException(status_code=400, detail="No configurations found to backup.")
@@ -69,7 +69,7 @@ async def link_prowlarr():
     """
     Endpoint to automatically connect Sonarr and Radarr to Prowlarr.
     """
-    discovered_apps = scan_configs(TEST_CONFIGS_DIR)
+    discovered_apps = scan_configs(CONFIGS_DIR)
 
     prowlarr_config = next((app for app in discovered_apps if app['app'].lower() == 'prowlarr'), None)
 
@@ -122,7 +122,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
     """
     Endpoint to automatically connect Sonarr and Radarr to Overseerr.
     """
-    discovered_apps = scan_configs(TEST_CONFIGS_DIR)
+    discovered_apps = scan_configs(CONFIGS_DIR)
 
     results = []
     errors = []
@@ -170,7 +170,7 @@ async def link_downloaders(request: LinkDownloadersRequest):
     """
     Endpoint to automatically connect Sonarr and Radarr to qBittorrent and NZBGet.
     """
-    discovered_apps = scan_configs(TEST_CONFIGS_DIR)
+    discovered_apps = scan_configs(CONFIGS_DIR)
 
     results = []
     errors = []
