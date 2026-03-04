@@ -31,3 +31,19 @@ Syncarr is an orchestration tool for the *arr homelab ecosystem (Sonarr, Radarr,
 
 ### Usage
 Open your browser and navigate to `http://localhost:8000` to view the Syncarr discovery dashboard.
+
+### Docker
+
+You can also run Syncarr using Docker.
+
+1. Build the Docker image:
+   ```bash
+   docker build -t syncarr .
+   ```
+
+2. Run the Docker container:
+   ```bash
+   docker run -p 8000:8000 syncarr
+   ```
+
+   Then open your browser and navigate to `http://localhost:8000`.
