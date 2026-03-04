@@ -38,11 +38,11 @@
             <h1 class="text-xl font-bold tracking-wider">SYNCARR</h1>
         </div>
         <nav class="flex-1 px-4 py-6 space-y-2">
-            <a href="#" class="flex items-center space-x-3 px-3 py-2 bg-servarrBg rounded-md text-white font-medium">
+            <a href="#" onclick="showView('discovery')" id="navDiscovery" class="flex items-center space-x-3 px-3 py-2 bg-servarrBg rounded-md text-white font-medium">
                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 <span>Discovery</span>
             </a>
-            <a href="#" class="flex items-center space-x-3 px-3 py-2 hover:bg-servarrBg rounded-md text-gray-400 font-medium transition">
+            <a href="#" onclick="showView('settings')" id="navSettings" class="flex items-center space-x-3 px-3 py-2 hover:bg-servarrBg rounded-md text-gray-400 font-medium transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 <span>Settings</span>
             </a>
@@ -52,7 +52,7 @@
     <!-- Main Content -->
     <main class="flex-1 flex flex-col overflow-hidden">
         <!-- Header -->
-        <header class="h-16 flex items-center px-6 border-b border-servarrBorder bg-servarrBg">
+        <header class="h-16 flex items-center px-6 border-b border-servarrBorder bg-servarrBg" id="headerDiscovery">
             <h2 class="text-lg font-semibold text-gray-200">System Discovery</h2>
             <div class="ml-auto flex space-x-3 items-center">
                 <input type="text" id="overseerrApiKey" placeholder="Overseerr API Key" class="bg-gray-700 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm w-48">
@@ -70,8 +70,13 @@
             </div>
         </header>
 
-        <!-- Content Area -->
-        <div class="flex-1 overflow-y-auto p-6">
+        <!-- Header Settings (Hidden by default) -->
+        <header class="h-16 flex items-center px-6 border-b border-servarrBorder bg-servarrBg hidden" id="headerSettings">
+            <h2 class="text-lg font-semibold text-gray-200">Settings</h2>
+        </header>
+
+        <!-- Discovery Content Area -->
+        <div id="viewDiscovery" class="flex-1 overflow-y-auto p-6">
             <div id="loading" class="hidden text-center py-10 text-gray-400">
                 <svg class="animate-spin h-8 w-8 mx-auto mb-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -90,6 +95,41 @@
                 <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                 <p class="text-lg">No applications discovered yet.</p>
                 <p class="text-sm mt-1">Click "Scan Now" to search the configured directory.</p>
+            </div>
+        </div>
+
+        <!-- Settings Content Area -->
+        <div id="viewSettings" class="flex-1 overflow-y-auto p-6 hidden">
+            <div class="max-w-3xl mx-auto">
+                <div class="bg-servarrCard rounded-lg shadow-lg border border-servarrBorder overflow-hidden">
+                    <div class="h-1 bg-gray-500 w-full"></div>
+                    <div class="p-6">
+                        <h3 class="text-xl font-bold text-white mb-6 border-b border-gray-700 pb-2">General Settings</h3>
+
+                        <div class="space-y-6">
+                            <div>
+                                <label for="configDir" class="block text-sm font-medium text-gray-300 mb-2">Scan Directory</label>
+                                <p class="text-xs text-gray-500 mb-3">The root directory path where Syncarr will scan for application configurations (e.g. <code>config.xml</code> files). If deploying in Docker/Kubernetes, this should point to your mapped volume containing the config files.</p>
+
+                                <div id="envOverrideAlert" class="hidden mb-3 bg-blue-900/50 border border-blue-500 text-blue-200 px-3 py-2 rounded text-sm">
+                                    <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    Currently overridden by <code>SYNCARR_CONFIG_DIR</code> environment variable.
+                                </div>
+
+                                <div class="flex items-center space-x-3">
+                                    <input type="text" id="configDir" class="flex-1 bg-gray-800 text-white px-4 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan w-full" placeholder="/path/to/configs">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-8 pt-6 border-t border-gray-700 flex justify-end">
+                            <button onclick="saveSettings()" id="saveSettingsBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium transition flex items-center shadow-lg">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                                Save Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
@@ -292,8 +332,117 @@
             }
         }
 
+        async function fetchSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    const configDirInput = document.getElementById('configDir');
+                    const envOverrideAlert = document.getElementById('envOverrideAlert');
+
+                    configDirInput.value = data.data.config_dir || '';
+
+                    if (data.data.env_override) {
+                        envOverrideAlert.classList.remove('hidden');
+                        configDirInput.disabled = true;
+                        configDirInput.classList.add('opacity-50', 'cursor-not-allowed');
+                        document.getElementById('saveSettingsBtn').disabled = true;
+                        document.getElementById('saveSettingsBtn').classList.add('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        envOverrideAlert.classList.add('hidden');
+                        configDirInput.disabled = false;
+                        configDirInput.classList.remove('opacity-50', 'cursor-not-allowed');
+                        document.getElementById('saveSettingsBtn').disabled = false;
+                        document.getElementById('saveSettingsBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch settings:", err);
+                showToast('Error', 'Failed to load settings.', true);
+            }
+        }
+
+        async function saveSettings() {
+            const configDirInput = document.getElementById('configDir').value.trim();
+            const saveBtn = document.getElementById('saveSettingsBtn');
+            const originalContent = saveBtn.innerHTML;
+
+            if (!configDirInput) {
+                showToast('Error', 'Scan directory cannot be empty.', true);
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = `
+                <svg class="animate-spin h-4 w-4 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
+            `;
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config_dir: configDirInput })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to save settings.');
+                }
+
+                showToast('Success', 'Settings saved successfully. Rescanning apps...');
+                discoverApps(); // trigger rescan
+            } catch (err) {
+                showToast('Error', err.message, true);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalContent;
+            }
+        }
+
+        function showView(viewName) {
+            const views = {
+                discovery: {
+                    content: document.getElementById('viewDiscovery'),
+                    header: document.getElementById('headerDiscovery'),
+                    nav: document.getElementById('navDiscovery')
+                },
+                settings: {
+                    content: document.getElementById('viewSettings'),
+                    header: document.getElementById('headerSettings'),
+                    nav: document.getElementById('navSettings')
+                }
+            };
+
+            // Reset all
+            Object.values(views).forEach(v => {
+                v.content.classList.add('hidden');
+                v.header.classList.add('hidden');
+                v.nav.classList.remove('bg-servarrBg', 'text-white');
+                v.nav.classList.add('text-gray-400');
+            });
+
+            // Show selected
+            views[viewName].content.classList.remove('hidden');
+            views[viewName].header.classList.remove('hidden');
+            views[viewName].nav.classList.add('bg-servarrBg', 'text-white');
+            views[viewName].nav.classList.remove('text-gray-400');
+
+            if (viewName === 'settings') {
+                fetchSettings();
+            }
+        }
+
         // Initial scan on load
-        document.addEventListener('DOMContentLoaded', discoverApps);
+        document.addEventListener('DOMContentLoaded', () => {
+            discoverApps();
+            fetchSettings();
+        });
     </script>
 </body>
 </html>
