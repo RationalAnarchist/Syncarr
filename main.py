@@ -29,6 +29,7 @@ class LinkDownloadersRequest(BaseModel):
 class LinkOverseerrRequest(BaseModel):
     api_key: str
     port: int = 5055
+    apps_to_link: list[str] = []
 
 class UpdateSettingsRequest(BaseModel):
     config_dir: str
@@ -199,7 +200,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
 
     for app in discovered_apps:
         app_name = app['app'].lower()
-        if app_name in ['sonarr', 'radarr']:
+        if app_name in ['sonarr', 'radarr'] and app.get('apiKey') in request.apps_to_link:
             payload = {
                 "name": app['app'],
                 "hostname": "localhost",
