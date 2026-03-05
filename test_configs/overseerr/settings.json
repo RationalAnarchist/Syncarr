@@ -1,0 +1,25 @@
+{
+ "clientId": "1c525e49-8fae-47b7-9f2b-d5962395af36",
+ "vapidPrivate": "mYc6fFW3qjxRjgDTqtmw5eQ38LigPZOA8hVfHjwfkL0",
+ "vapidPublic": "BG-gmIOYddwH8m5xsBe1ofNiw-iod1Y_uDdb3mvdyibFk6jHcMEvX6dxeH0p0dPbZZq1ZRtmKmdIo06480hpmc4",
+ "main": {
+  "apiKey": "MTc2OTU0ODY2MDMyN2UzZjliMzI1LWI3M2YtNGYxMy04NjYyLTc3ZjhjYWM2YTFiNA==",
+  "applicationTitle": "Overseerr",
+  "applicationUrl": "",
+  "csrfProtection": false,
+  "cacheImages": false,
+  "defaultPermissions": 32,
+  "defaultQuotas": {
+   "movie": {},
+   "tv": {}
+  },
+  "hideAvailable": false,
+  "localLogin": true,
+  "newPlexLogin": true,
+  "region": "",
+  "originalLanguage": "",
+  "trustProxy": false,
+  "partialRequestsEnabled": true,
+  "locale": "en"
+ }
+}
