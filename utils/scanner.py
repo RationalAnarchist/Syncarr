@@ -36,22 +36,29 @@ def parse_config(filepath):
         return None
 
 def parse_settings_json(filepath):
-    """
-    Parses a settings.json file (e.g., from Overseerr) to extract ApiKey.
-    Returns a dictionary with ApiKey, Port (empty), and UrlBase (empty) or None.
-    """
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-            # Overseerr stores its key in main.apiKey
             api_key = data.get('main', {}).get('apiKey', '')
+
+            linked_api_keys = []
+            if 'radarr' in data and isinstance(data['radarr'], list):
+                for instance in data['radarr']:
+                    if isinstance(instance, dict) and 'apiKey' in instance:
+                        linked_api_keys.append(instance['apiKey'])
+
+            if 'sonarr' in data and isinstance(data['sonarr'], list):
+                for instance in data['sonarr']:
+                    if isinstance(instance, dict) and 'apiKey' in instance:
+                        linked_api_keys.append(instance['apiKey'])
 
             if api_key:
                 return {
                     "ApiKey": api_key,
                     "Port": "",
-                    "UrlBase": ""
+                    "UrlBase": "",
+                    "LinkedApiKeys": linked_api_keys
                 }
         return None
     except Exception as e:
@@ -95,7 +102,8 @@ def scan_configs(base_dir):
                         "path": filepath,
                         "apiKey": config_data.get("ApiKey"),
                         "port": config_data.get("Port"),
-                        "urlBase": config_data.get("UrlBase")
+                        "urlBase": config_data.get("UrlBase"),
+                        "linkedApiKeys": config_data.get("LinkedApiKeys", [])
                     })
             elif file.lower() == 'settings.json':
                 filepath = os.path.join(root, file)
@@ -108,7 +116,8 @@ def scan_configs(base_dir):
                         "path": filepath,
                         "apiKey": config_data.get("ApiKey"),
                         "port": config_data.get("Port"),
-                        "urlBase": config_data.get("UrlBase")
+                        "urlBase": config_data.get("UrlBase"),
+                        "linkedApiKeys": config_data.get("LinkedApiKeys", [])
                     })
 
     return discovered_apps
