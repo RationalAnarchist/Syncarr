@@ -1,5 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
+import json
 
 KNOWN_APPS = ['sonarr', 'radarr', 'lidarr', 'prowlarr', 'overseerr', 'readarr', 'whisparr']
 
@@ -34,6 +35,29 @@ def parse_config(filepath):
         print(f"Error parsing {filepath}: {e}")
         return None
 
+def parse_settings_json(filepath):
+    """
+    Parses a settings.json file (e.g., from Overseerr) to extract ApiKey.
+    Returns a dictionary with ApiKey, Port (empty), and UrlBase (empty) or None.
+    """
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+            # Overseerr stores its key in main.apiKey
+            api_key = data.get('main', {}).get('apiKey', '')
+
+            if api_key:
+                return {
+                    "ApiKey": api_key,
+                    "Port": "",
+                    "UrlBase": ""
+                }
+        return None
+    except Exception as e:
+        print(f"Error parsing {filepath}: {e}")
+        return None
+
 def identify_app(filepath, config_data):
     """
     Guesses the app based on the directory name.
@@ -63,6 +87,19 @@ def scan_configs(base_dir):
             if file.lower() == 'config.xml':
                 filepath = os.path.join(root, file)
                 config_data = parse_config(filepath)
+
+                if config_data:
+                    app_name = identify_app(filepath, config_data)
+                    discovered_apps.append({
+                        "app": app_name,
+                        "path": filepath,
+                        "apiKey": config_data.get("ApiKey"),
+                        "port": config_data.get("Port"),
+                        "urlBase": config_data.get("UrlBase")
+                    })
+            elif file.lower() == 'settings.json':
+                filepath = os.path.join(root, file)
+                config_data = parse_settings_json(filepath)
 
                 if config_data:
                     app_name = identify_app(filepath, config_data)
