@@ -73,7 +73,10 @@ def test_link_overseerr():
             payload = {
                 "api_key": "overseerr_test_key",
                 "port": 5055,
-                "apps_to_link": ["test_sonarr_key", "test_radarr_key"]
+                "apps_to_link": [
+                    {"api_key": "test_sonarr_key", "hostname": "localhost"},
+                    {"api_key": "test_radarr_key", "hostname": "192.168.1.10"}
+                ]
             }
 
             response = client.post("/api/link/overseerr", json=payload)
