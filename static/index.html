@@ -117,6 +117,17 @@
                                     <input type="text" id="configDir" class="flex-1 bg-gray-800 text-white px-4 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan w-full" placeholder="/path/to/configs">
                                 </div>
                             </div>
+                            <div class="mt-6">
+                                <label for="logLevel" class="block text-sm font-medium text-gray-300 mb-2">Log Level</label>
+                                <p class="text-xs text-gray-500 mb-3">Set the verbosity of backend logging.</p>
+                                <select id="logLevel" class="w-full bg-gray-800 text-white px-4 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
+                                    <option value="DEBUG">Debug</option>
+                                    <option value="INFO">Info</option>
+                                    <option value="WARNING">Warning</option>
+                                    <option value="ERROR">Error</option>
+                                </select>
+                            </div>
+
                         </div>
 
                         <div class="mt-8 pt-6 border-t border-gray-700 flex justify-end">
@@ -446,6 +457,9 @@
                     const envOverrideAlert = document.getElementById('envOverrideAlert');
 
                     configDirInput.value = data.data.config_dir || '';
+                    if (data.data.log_level) {
+                        document.getElementById('logLevel').value = data.data.log_level;
+                    }
 
                     if (data.data.env_override) {
                         envOverrideAlert.classList.remove('hidden');
@@ -469,6 +483,7 @@
 
         async function saveSettings() {
             const configDirInput = document.getElementById('configDir').value.trim();
+            const logLevelInput = document.getElementById('logLevel').value;
             const saveBtn = document.getElementById('saveSettingsBtn');
             const originalContent = saveBtn.innerHTML;
 
@@ -490,7 +505,7 @@
                 const response = await fetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ config_dir: configDirInput })
+                    body: JSON.stringify({ config_dir: configDirInput, log_level: logLevelInput })
                 });
 
                 const data = await response.json();

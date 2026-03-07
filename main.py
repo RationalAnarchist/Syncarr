@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 import os
+import logging
 import json
 from utils.scanner import scan_configs
 from utils.backup import create_backup
@@ -32,14 +33,43 @@ class AppLinkInfo(BaseModel):
 
 class LinkOverseerrRequest(BaseModel):
     api_key: str
+    host: str = "localhost"
     port: int = 5055
     apps_to_link: list[AppLinkInfo] = []
 
 class UpdateSettingsRequest(BaseModel):
     config_dir: str
+    log_level: str = "INFO"
 
 
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
+
+# Logging setup
+logger = logging.getLogger("syncarr")
+logger.setLevel(logging.INFO)
+
+# Console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+def setup_logging():
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r") as f:
+                settings = json.load(f)
+                log_level_str = settings.get("log_level", "INFO").upper()
+                level = getattr(logging, log_level_str, logging.INFO)
+                logger.setLevel(level)
+                ch.setLevel(level)
+                logger.info(f"Logging level set to {log_level_str}")
+        except Exception as e:
+            print(f"Error setting up logging: {e}")
+
+setup_logging()
+
 
 def get_configs_dir():
     # Allow overriding the config directory via environment variable first
@@ -77,7 +107,8 @@ def get_settings():
         "status": "success",
         "data": {
             "config_dir": settings.get("config_dir", os.path.join(os.path.dirname(__file__), "test_configs")),
-            "env_override": os.environ.get("SYNCARR_CONFIG_DIR", None)
+            "env_override": os.environ.get("SYNCARR_CONFIG_DIR", None),
+            "log_level": settings.get("log_level", "INFO")
         }
     })
 
@@ -96,6 +127,13 @@ def update_settings(request: UpdateSettingsRequest):
             pass
 
     settings["config_dir"] = request.config_dir
+    settings["log_level"] = request.log_level
+
+    # Update current logger level
+    level = getattr(logging, request.log_level.upper(), logging.INFO)
+    logger.setLevel(level)
+    for handler in logger.handlers:
+        handler.setLevel(level)
 
     try:
         with open(SETTINGS_FILE, "w") as f:
@@ -161,6 +199,7 @@ async def link_prowlarr():
     for app in discovered_apps:
         app_name = app['app']
         if app_name.lower() in ['sonarr', 'radarr']:
+            logger.debug(f"Attempting to link Downloaders to {app_name}")
             app_ip = "localhost" # Defaulting to localhost since config.xml doesn't hold the actual IP
             app_port = app['port']
             app_api_key = app['apiKey']
@@ -178,10 +217,13 @@ async def link_prowlarr():
                     app_api_key=app_api_key,
                     sync_level="fullSync"
                 )
+                logger.info(f"Successfully linked {app_name} to Prowlarr")
                 results.append({"app": app_name, "status": "success", "result": result})
             except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
                 errors.append({"app": app_name, "status": "error", "message": f"HTTP Error: {e.response.status_code} - {e.response.text}"})
             except Exception as e:
+                logger.error(f"Error: {str(e)}")
                 errors.append({"app": app_name, "status": "error", "message": str(e)})
 
     return JSONResponse(content={
@@ -200,7 +242,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
     results = []
     errors = []
 
-    overseerr_url = f"http://localhost:{request.port}"
+    overseerr_url = f"http://{request.host}:{request.port}"
 
     for app in discovered_apps:
         app_name = app['app'].lower()
@@ -210,6 +252,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
         app_link_info = next((item for item in request.apps_to_link if item.api_key == app_api_key), None)
 
         if app_name in ['sonarr', 'radarr'] and app_link_info:
+            logger.debug(f"Attempting to link {app_name} to Overseerr")
             payload = {
                 "name": app['app'],
                 "hostname": app_link_info.hostname,
@@ -227,14 +270,17 @@ async def link_overseerr(request: LinkOverseerrRequest):
 
                 server_id = result.get('id')
 
+                logger.info(f"Successfully linked {app_name} to Overseerr")
                 # trigger sync
                 if server_id:
                     await sync_overseerr_profiles(overseerr_url, request.api_key, app_name, server_id)
 
                 results.append({"app": app_name, "status": "success", "result": result})
             except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
                 errors.append({"app": app_name, "status": "error", "message": f"HTTP Error: {e.response.status_code} - {e.response.text}"})
             except Exception as e:
+                logger.error(f"Error: {str(e)}")
                 errors.append({"app": app_name, "status": "error", "message": str(e)})
 
     return JSONResponse(content={
@@ -256,6 +302,7 @@ async def link_downloaders(request: LinkDownloadersRequest):
     for app in discovered_apps:
         app_name = app['app']
         if app_name.lower() in ['sonarr', 'radarr']:
+            logger.debug(f"Attempting to link Downloaders to {app_name}")
             app_ip = "localhost" # Defaulting to localhost since config.xml doesn't hold the actual IP
             app_port = app['port']
             app_api_key = app['apiKey']
@@ -265,6 +312,7 @@ async def link_downloaders(request: LinkDownloadersRequest):
             app_url = f"http://{app_ip}:{app_port}{app_url_base}"
 
             if request.qbittorrent:
+                logger.debug(f"Attempting to link qBittorrent to {app_name}")
                 try:
                     payload = build_qbittorrent_payload(request.qbittorrent.model_dump())
                     result = await add_download_client(
@@ -272,13 +320,17 @@ async def link_downloaders(request: LinkDownloadersRequest):
                         app_api_key=app_api_key,
                         payload=payload
                     )
+                    logger.info(f"Successfully linked qBittorrent to {app_name}")
                     results.append({"app": app_name, "client": "qbittorrent", "status": "success", "result": result})
                 except httpx.HTTPStatusError as e:
+                    logger.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
                     errors.append({"app": app_name, "client": "qbittorrent", "status": "error", "message": f"HTTP Error: {e.response.status_code} - {e.response.text}"})
                 except Exception as e:
+                    logger.error(f"Error: {str(e)}")
                     errors.append({"app": app_name, "client": "qbittorrent", "status": "error", "message": str(e)})
 
             if request.nzbget:
+                logger.debug(f"Attempting to link NZBGet to {app_name}")
                 try:
                     payload = build_nzbget_payload(request.nzbget.model_dump())
                     # the payload differs slightly by implementation, map 'category' logic here:
@@ -294,10 +346,13 @@ async def link_downloaders(request: LinkDownloadersRequest):
                         app_api_key=app_api_key,
                         payload=payload
                     )
+                    logger.info(f"Successfully linked NZBGet to {app_name}")
                     results.append({"app": app_name, "client": "nzbget", "status": "success", "result": result})
                 except httpx.HTTPStatusError as e:
+                    logger.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
                     errors.append({"app": app_name, "client": "nzbget", "status": "error", "message": f"HTTP Error: {e.response.status_code} - {e.response.text}"})
                 except Exception as e:
+                    logger.error(f"Error: {str(e)}")
                     errors.append({"app": app_name, "client": "nzbget", "status": "error", "message": str(e)})
 
     return JSONResponse(content={
