@@ -26,11 +26,11 @@ Syncarr is an orchestration tool for the *arr homelab ecosystem (Sonarr, Radarr,
 
 3. Run the development server:
    ```bash
-   python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+   python -m uvicorn main:app --host 0.0.0.0 --port 9898 --reload
    ```
 
 ### Usage
-Open your browser and navigate to `http://localhost:8000` to view the Syncarr discovery dashboard.
+Open your browser and navigate to `http://localhost:9898` to view the Syncarr discovery dashboard.
 
 ### Docker
 
@@ -43,7 +43,7 @@ You can also run Syncarr using Docker.
 
 2. Run the Docker container:
    ```bash
-   docker run -p 8000:8000 syncarr
+   docker run -p 9898:9898 syncarr
    ```
 
-   Then open your browser and navigate to `http://localhost:8000`.
+   Then open your browser and navigate to `http://localhost:9898`.
