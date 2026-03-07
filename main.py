@@ -199,7 +199,7 @@ async def link_prowlarr():
     for app in discovered_apps:
         app_name = app['app']
         if app_name.lower() in ['sonarr', 'radarr']:
-            logger.debug(f"Attempting to link Downloaders to {app_name}")
+            logger.debug(f"Attempting to link {app_name} to Prowlarr at {prowlarr_url}")
             app_ip = "localhost" # Defaulting to localhost since config.xml doesn't hold the actual IP
             app_port = app['port']
             app_api_key = app['apiKey']
@@ -209,6 +209,7 @@ async def link_prowlarr():
             app_url = f"http://{app_ip}:{app_port}{app_url_base}"
 
             try:
+                logger.debug(f"Sending request to Prowlarr at {prowlarr_url} to add {app_name} at {app_url}")
                 result = await add_app_to_prowlarr(
                     prowlarr_url=prowlarr_url,
                     prowlarr_api_key=prowlarr_api_key,
@@ -252,7 +253,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
         app_link_info = next((item for item in request.apps_to_link if item.api_key == app_api_key), None)
 
         if app_name in ['sonarr', 'radarr'] and app_link_info:
-            logger.debug(f"Attempting to link {app_name} to Overseerr")
+            logger.debug(f"Attempting to link {app_name} to Overseerr at {overseerr_url} with payload host {app_link_info.hostname}")
             payload = {
                 "name": app['app'],
                 "hostname": app_link_info.hostname,
@@ -263,6 +264,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
             }
 
             try:
+                logger.debug(f"Sending payload to {overseerr_url}: {payload}")
                 if app_name == 'radarr':
                     result = await add_radarr_to_overseerr(overseerr_url, request.api_key, payload)
                 else:
