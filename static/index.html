@@ -117,6 +117,17 @@
                                     <input type="text" id="configDir" class="flex-1 bg-gray-800 text-white px-4 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan w-full" placeholder="/path/to/configs">
                                 </div>
                             </div>
+                            <div class="mt-6">
+                                <label for="logLevel" class="block text-sm font-medium text-gray-300 mb-2">Log Level</label>
+                                <p class="text-xs text-gray-500 mb-3">Set the verbosity of backend logging.</p>
+                                <select id="logLevel" class="w-full bg-gray-800 text-white px-4 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
+                                    <option value="DEBUG">Debug</option>
+                                    <option value="INFO">Info</option>
+                                    <option value="WARNING">Warning</option>
+                                    <option value="ERROR">Error</option>
+                                </select>
+                            </div>
+
                         </div>
 
                         <div class="mt-8 pt-6 border-t border-gray-700 flex justify-end">
@@ -200,10 +211,15 @@
             `;
 
             try {
+                const overseerrHostInput = document.getElementById('hostname-overseerr');
+                const overseerrHost = overseerrHostInput ? overseerrHostInput.value.trim() || 'localhost' : 'localhost';
+                const overseerrPortInput = document.getElementById('port-overseerr');
+                const overseerrPort = overseerrPortInput ? parseInt(overseerrPortInput.value) || 5055 : 5055;
+
                 const response = await fetch('/api/link/overseerr', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ api_key: apiKey, port: 5055, apps_to_link: appsToLink })
+                    body: JSON.stringify({ api_key: apiKey, host: overseerrHost, port: overseerrPort, apps_to_link: appsToLink })
                 });
 
                 const data = await response.json();
@@ -313,6 +329,16 @@
             if (appData.app.toLowerCase() === 'overseerr') {
                 linkButton = `
                     <div class="mt-4 pt-4 border-t border-gray-700">
+                        <div class="flex space-x-2 mb-3">
+                            <div class="flex-1">
+                                <label for="hostname-overseerr" class="block text-xs font-medium text-gray-400 mb-1">Hostname / IP</label>
+                                <input type="text" id="hostname-overseerr" value="localhost" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                            </div>
+                            <div class="w-24">
+                                <label for="port-overseerr" class="block text-xs font-medium text-gray-400 mb-1">Port</label>
+                                <input type="number" id="port-overseerr" value="5055" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                            </div>
+                        </div>
                         <button onclick="linkOverseerr('${appData.apiKey}')" id="linkOverseerrBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center">
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
                             Link Selected Instances
@@ -431,6 +457,9 @@
                     const envOverrideAlert = document.getElementById('envOverrideAlert');
 
                     configDirInput.value = data.data.config_dir || '';
+                    if (data.data.log_level) {
+                        document.getElementById('logLevel').value = data.data.log_level;
+                    }
 
                     if (data.data.env_override) {
                         envOverrideAlert.classList.remove('hidden');
@@ -454,6 +483,7 @@
 
         async function saveSettings() {
             const configDirInput = document.getElementById('configDir').value.trim();
+            const logLevelInput = document.getElementById('logLevel').value;
             const saveBtn = document.getElementById('saveSettingsBtn');
             const originalContent = saveBtn.innerHTML;
 
@@ -475,7 +505,7 @@
                 const response = await fetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ config_dir: configDirInput })
+                    body: JSON.stringify({ config_dir: configDirInput, log_level: logLevelInput })
                 });
 
                 const data = await response.json();
