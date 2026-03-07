@@ -180,7 +180,13 @@
                 return;
             }
 
-            const appsToLink = Array.from(selectedApps);
+            const appsToLink = Array.from(selectedApps).map(key => {
+                const hostnameInput = document.getElementById('hostname-' + key);
+                return {
+                    api_key: key,
+                    hostname: hostnameInput ? hostnameInput.value.trim() || 'localhost' : 'localhost'
+                };
+            });
 
             const btn = document.getElementById('linkOverseerrBtn');
             const originalContent = btn.innerHTML;
@@ -337,6 +343,12 @@
                         </div>
 
                         <div class="space-y-3 flex-1">
+                            ${isSelectable ? `
+                            <div>
+                                <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Hostname / IP</label>
+                                <input type="text" id="hostname-${appData.apiKey}" onclick="event.stopPropagation()" value="localhost" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
+                            </div>
+                            ` : ''}
                             <div>
                                 <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">API Key</label>
                                 <div class="mt-1 flex items-center bg-gray-900 rounded border border-gray-700 p-2">

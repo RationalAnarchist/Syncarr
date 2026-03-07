@@ -26,10 +26,14 @@ class LinkDownloadersRequest(BaseModel):
     qbittorrent: Optional[ClientConfig] = None
     nzbget: Optional[ClientConfig] = None
 
+class AppLinkInfo(BaseModel):
+    api_key: str
+    hostname: str = "localhost"
+
 class LinkOverseerrRequest(BaseModel):
     api_key: str
     port: int = 5055
-    apps_to_link: list[str] = []
+    apps_to_link: list[AppLinkInfo] = []
 
 class UpdateSettingsRequest(BaseModel):
     config_dir: str
@@ -200,12 +204,17 @@ async def link_overseerr(request: LinkOverseerrRequest):
 
     for app in discovered_apps:
         app_name = app['app'].lower()
-        if app_name in ['sonarr', 'radarr'] and app.get('apiKey') in request.apps_to_link:
+
+        # Check if this app is in the request's apps_to_link
+        app_api_key = app.get('apiKey')
+        app_link_info = next((item for item in request.apps_to_link if item.api_key == app_api_key), None)
+
+        if app_name in ['sonarr', 'radarr'] and app_link_info:
             payload = {
                 "name": app['app'],
-                "hostname": "localhost",
+                "hostname": app_link_info.hostname,
                 "port": int(app['port']),
-                "apiKey": app['apiKey'],
+                "apiKey": app_api_key,
                 "useSsl": False,
                 "baseUrl": app.get('urlBase', '') or ""
             }
