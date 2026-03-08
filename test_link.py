@@ -72,6 +72,7 @@ def test_link_overseerr():
 
             payload = {
                 "api_key": "overseerr_test_key",
+                "host": "localhost",
                 "port": 5055,
                 "apps_to_link": [
                     {"api_key": "test_sonarr_key", "hostname": "localhost"},
