@@ -1,3 +1,4 @@
+import xml.etree.ElementTree as ET
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi import HTTPException
@@ -30,6 +31,13 @@ class LinkDownloadersRequest(BaseModel):
 class AppLinkInfo(BaseModel):
     api_key: str
     hostname: str = "localhost"
+
+class SetupAppRequest(BaseModel):
+    app_name: str
+    auth_method: str = "None"
+    username: Optional[str] = ""
+    password: Optional[str] = ""
+    root_folder: Optional[str] = ""
 
 class LinkOverseerrRequest(BaseModel):
     api_key: str
@@ -144,12 +152,109 @@ def update_settings(request: UpdateSettingsRequest):
     return JSONResponse(content={"status": "success", "message": "Settings updated successfully."})
 
 
+@app.post("/api/setup")
+async def setup_app(request: SetupAppRequest):
+    """
+    Endpoint to setup Sonarr or Radarr.
+    """
+    discovered_apps = scan_configs(get_configs_dir())
+
+    app_config = next((app for app in discovered_apps if app['app'].lower() == request.app_name.lower()), None)
+    if not app_config:
+        raise HTTPException(status_code=404, detail=f"App {request.app_name} not found.")
+
+    filepath = app_config['path']
+    try:
+        tree = ET.parse(filepath)
+        root = tree.getroot()
+
+        # Helper to update or add element
+        def update_or_add(tag, text):
+            elem = root.find(tag)
+            if elem is None:
+                elem = ET.SubElement(root, tag)
+            elem.text = text
+
+        update_or_add("AuthenticationMethod", request.auth_method)
+        if request.auth_method != "None":
+            update_or_add("Username", request.username)
+            update_or_add("Password", request.password)
+
+        tree.write(filepath, encoding="utf-8", xml_declaration=False)
+    except Exception as e:
+        logger.error(f"Failed to update config.xml: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update config.xml: {e}")
+
+    if request.root_folder:
+        app_ip = "localhost"
+        app_port = app_config['port']
+        app_api_key = app_config['apiKey']
+        app_url_base = app_config.get('urlBase', '')
+        app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+
+        url = f"{app_url}/api/v3/rootfolder"
+        headers = {"X-Api-Key": app_api_key}
+        payload = {"path": request.root_folder}
+
+        async with httpx.AsyncClient() as client:
+            try:
+                # First check if it exists
+                response = await client.get(url, headers=headers)
+                if response.status_code == 200:
+                    existing_folders = response.json()
+                    for f in existing_folders:
+                        if f.get('path') == request.root_folder:
+                            return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
+
+                # If not, add it
+                post_response = await client.post(url, headers=headers, json=payload)
+                if post_response.status_code not in (200, 201):
+                    logger.error(f"Failed to add root folder: {post_response.status_code} - {post_response.text}")
+                    raise HTTPException(status_code=500, detail=f"Failed to add root folder: {post_response.text}")
+            except httpx.RequestError as e:
+                logger.error(f"Failed to connect to app: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to connect to app to add root folder: {e}")
+
+    return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
+
 @app.get("/api/discover")
-def discover_apps():
+async def discover_apps():
     """
     Endpoint to trigger the scan on the config path and return the discovered apps.
     """
     discovered_apps = scan_configs(get_configs_dir())
+
+    # Check root folders for Sonarr and Radarr
+    async with httpx.AsyncClient() as client:
+        for app in discovered_apps:
+            app_name = app['app'].lower()
+            if app_name in ['sonarr', 'radarr']:
+                app_ip = "localhost" # Docker container or local
+                app_port = app['port']
+                app_api_key = app['apiKey']
+                app_url_base = app.get('urlBase', '')
+                app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+
+                url = f"{app_url}/api/v3/rootfolder"
+                headers = {"X-Api-Key": app_api_key}
+
+                root_folders = []
+                try:
+                    # In test environment, the app might not be running. We need to handle connection errors.
+                    response = await client.get(url, headers=headers, timeout=2.0)
+                    if response.status_code == 200:
+                        root_folders = response.json()
+                except Exception as e:
+                    logger.debug(f"Failed to fetch root folders for {app_name}: {e}")
+
+                app['rootFolders'] = root_folders
+
+                auth_method = app.get('authMethod', 'None')
+                is_auth_configured = auth_method != 'None' and auth_method != ''
+                has_root_folders = len(root_folders) > 0
+
+                app['isSetupComplete'] = is_auth_configured and has_root_folders
+
     return JSONResponse(content={"status": "success", "data": discovered_apps})
 
 @app.post("/api/backup")

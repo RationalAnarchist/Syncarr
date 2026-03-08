@@ -142,6 +142,54 @@
         </div>
     </main>
 
+    <!-- Setup Modal -->
+    <div id="setupModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity">
+        <div class="bg-servarrCard w-full max-w-md rounded-lg shadow-xl border border-servarrBorder overflow-hidden scale-95 transition-transform" id="setupModalContent">
+            <div class="px-6 py-4 border-b border-servarrBorder flex justify-between items-center bg-servarrBg">
+                <h3 class="text-lg font-bold" id="setupModalTitle">Setup App</h3>
+                <button onclick="closeSetupModal()" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="setupAppName">
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Authentication Method</label>
+                    <select id="setupAuthMethod" onchange="toggleAuthFields()" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                        <option value="None">None</option>
+                        <option value="Basic">Basic</option>
+                        <option value="Forms">Forms</option>
+                    </select>
+                </div>
+
+                <div id="setupAuthFields" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
+                        <input type="text" id="setupUsername" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="admin">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Password</label>
+                        <input type="password" id="setupPassword" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Root Folder</label>
+                    <input type="text" id="setupRootFolder" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="/data/media/movies">
+                    <p class="text-xs text-gray-500 mt-1">This path must be accessible by the app container.</p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-servarrBorder flex justify-end space-x-3 bg-servarrBg">
+                <button onclick="closeSetupModal()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-medium transition text-sm">Cancel</button>
+                <button onclick="saveSetup()" id="saveSetupBtn" class="px-4 py-2 bg-[#38A169] hover:bg-[#2F855A] text-white rounded-md font-medium transition text-sm flex items-center">
+                    Save Setup
+                </button>
+            </div>
+        </div>
+    </div>
+
+
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-5 right-5 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
         <div class="bg-servarrCard border-l-4 border-servarrCyan text-white p-4 rounded shadow-lg flex items-center">
@@ -317,12 +365,25 @@
             }
 
             let selectionIndicator = '';
+            let isSetupComplete = appData.isSetupComplete !== undefined ? appData.isSetupComplete : true;
             if (isSelectable) {
-                selectionIndicator = `
-                    <div class="absolute top-2 right-2 z-10">
-                        <input type="checkbox" class="w-5 h-5 rounded bg-gray-900 border-gray-700 text-servarrCyan focus:ring-servarrCyan cursor-pointer pointer-events-none" ${isSelected ? 'checked' : ''} />
-                    </div>
-                `;
+                if (isSetupComplete) {
+                    selectionIndicator = `
+                        <div class="absolute top-2 right-2 z-10">
+                            <input type="checkbox" class="w-5 h-5 rounded bg-gray-900 border-gray-700 text-servarrCyan focus:ring-servarrCyan cursor-pointer pointer-events-none" ${isSelected ? 'checked' : ''} />
+                        </div>
+                    `;
+                } else {
+                    selectionIndicator = `
+                        <div class="absolute top-2 right-2 z-10">
+                            <span class="px-2 py-0.5 bg-red-900/50 text-red-400 text-xs font-medium rounded border border-red-700">Setup Required</span>
+                        </div>
+                    `;
+                    // Remove from selected apps if setup is not complete
+                    if (selectedApps.has(appData.apiKey)) {
+                        selectedApps.delete(appData.apiKey);
+                    }
+                }
             }
 
             let linkButton = '';
@@ -357,8 +418,20 @@
                 `;
             }
 
+            let setupAction = '';
+            if (isSelectable && !isSetupComplete) {
+                setupAction = `
+                    <div class="mt-4 pt-4 border-t border-gray-700">
+                        <button onclick="event.stopPropagation(); openSetupModal('${appData.app}', '${appData.authMethod || 'None'}')" class="w-full bg-[#38A169] hover:bg-[#2F855A] text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center relative z-20">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            Complete Setup
+                        </button>
+                    </div>
+                `;
+            }
+
             return `
-                <div class="${cardClasses} relative ${isSelectable ? 'cursor-pointer' : ''}" ${isSelectable ? `onclick="toggleAppSelection('${appData.apiKey}')"` : ''}>
+                <div class="${cardClasses} relative ${isSelectable && isSetupComplete ? 'cursor-pointer' : ''}" ${isSelectable && isSetupComplete ? `onclick="toggleAppSelection('${appData.apiKey}')"` : ''}>
                     ${selectionIndicator}
                     <div class="h-1 ${accentColor} w-full"></div>
                     <div class="p-5 flex-1 flex flex-col relative">
@@ -393,6 +466,7 @@
                                 </div>
                             </div>
                         </div>
+                        ${setupAction}
                         ${linkButton}
                     </div>
                 </div>
@@ -562,6 +636,115 @@
             discoverApps();
             fetchSettings();
         });
-    </script>
+
+        function openSetupModal(appName, currentAuthMethod) {
+            document.getElementById('setupAppName').value = appName;
+            document.getElementById('setupModalTitle').innerText = 'Setup ' + appName;
+
+            const authSelect = document.getElementById('setupAuthMethod');
+            if (currentAuthMethod) {
+                let found = false;
+                for(let i=0; i<authSelect.options.length; i++) {
+                    if(authSelect.options[i].value === currentAuthMethod) {
+                        authSelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found && currentAuthMethod !== '') {
+                    const opt = document.createElement('option');
+                    opt.value = currentAuthMethod;
+                    opt.innerHTML = currentAuthMethod;
+                    authSelect.appendChild(opt);
+                    authSelect.value = currentAuthMethod;
+                }
+            } else {
+                authSelect.value = 'None';
+            }
+
+            document.getElementById('setupUsername').value = '';
+            document.getElementById('setupPassword').value = '';
+            document.getElementById('setupRootFolder').value = '';
+
+            toggleAuthFields();
+
+            const modal = document.getElementById('setupModal');
+            const content = document.getElementById('setupModalContent');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeSetupModal() {
+            const modal = document.getElementById('setupModal');
+            const content = document.getElementById('setupModalContent');
+            modal.classList.add('opacity-0');
+            content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function toggleAuthFields() {
+            const method = document.getElementById('setupAuthMethod').value;
+            const fields = document.getElementById('setupAuthFields');
+            if (method === 'None' || method === 'External') {
+                fields.classList.add('hidden');
+            } else {
+                fields.classList.remove('hidden');
+            }
+        }
+
+        async function saveSetup() {
+            const btn = document.getElementById('saveSetupBtn');
+            const originalContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `
+                <svg class="animate-spin h-4 w-4 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
+            `;
+
+            try {
+                const appName = document.getElementById('setupAppName').value;
+                const authMethod = document.getElementById('setupAuthMethod').value;
+                const username = document.getElementById('setupUsername').value;
+                const password = document.getElementById('setupPassword').value;
+                const rootFolder = document.getElementById('setupRootFolder').value.trim();
+
+                const response = await fetch('/api/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        app_name: appName,
+                        auth_method: authMethod,
+                        username: username,
+                        password: password,
+                        root_folder: rootFolder
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to save setup.');
+                }
+
+                showToast('Setup Saved', `${appName} has been successfully configured.`);
+                closeSetupModal();
+                discoverApps();
+            } catch (err) {
+                showToast('Setup Error', err.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+            }
+        }
+
+</script>
 </body>
 </html>
