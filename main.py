@@ -260,8 +260,18 @@ async def link_overseerr(request: LinkOverseerrRequest):
                 "port": int(app['port']),
                 "apiKey": app_api_key,
                 "useSsl": False,
-                "baseUrl": app.get('urlBase', '') or ""
+                "baseUrl": app.get('urlBase', '') or "",
+                "activeProfileId": 1,
+                "activeProfileName": "",
+                "activeDirectory": "",
+                "is4k": False,
+                "isDefault": False
             }
+
+            if app_name == 'radarr':
+                payload["minimumAvailability"] = ""
+            elif app_name == 'sonarr':
+                payload["enableSeasonFolders"] = False
 
             try:
                 logger.debug(f"Sending payload to {overseerr_url}: {payload}")
