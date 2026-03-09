@@ -159,23 +159,32 @@
                     <input type="text" id="setupHost" value="localhost" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="localhost">
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Authentication Method</label>
-                    <select id="setupAuthMethod" onchange="toggleAuthFields()" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
-                        <option value="None">None</option>
-                        <option value="Basic">Basic</option>
-                        <option value="Forms">Forms</option>
-                    </select>
-                </div>
-
-                <div id="setupAuthFields" class="space-y-4 hidden">
+                <div id="setupAuthSection" class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
-                        <input type="text" id="setupUsername" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="admin">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Authentication Method</label>
+                        <select id="setupAuthMethod" onchange="toggleAuthFields()" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                            <option value="None">None</option>
+                            <option value="Basic">Basic</option>
+                            <option value="Forms">Forms</option>
+                        </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-1">Password</label>
-                        <input type="password" id="setupPassword" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+
+                    <div id="setupAuthFields" class="space-y-4 hidden">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Authentication Required</label>
+                            <select id="setupAuthRequired" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                                <option value="Enabled">Enabled</option>
+                                <option value="DisabledForLocalAddresses">Disabled for Local Addresses</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
+                            <input type="text" id="setupUsername" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="admin">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Password</label>
+                            <input type="password" id="setupPassword" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                        </div>
                     </div>
                 </div>
 
@@ -346,6 +355,13 @@
         let selectedApps = new Set();
         let overseerrLinkedKeys = [];
         let allDiscoveredApps = [];
+        let appHostnames = {};
+
+        function handleHostnameChange(apiKey, value) {
+            if (apiKey) {
+                appHostnames[apiKey] = value;
+            }
+        }
 
         function toggleAppSelection(apiKey) {
             if (!apiKey) return;
@@ -450,7 +466,7 @@
                             ${isSelectable ? `
                             <div>
                                 <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider flex items-center">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="ml-1 cursor-help text-gray-400 hover:text-white">ⓘ</span></label>
-                                <input type="text" id="hostname-${appData.apiKey}" onclick="event.stopPropagation()" value="localhost" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
+                                <input type="text" id="hostname-${appData.apiKey}" oninput="handleHostnameChange('${appData.apiKey}', this.value)" onclick="event.stopPropagation()" value="${appHostnames[appData.apiKey] || 'localhost'}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
                             </div>
                             ` : ''}
                             <div>
@@ -658,7 +674,11 @@
             document.getElementById('setupModalTitle').innerText = 'Setup ' + appName;
 
             const authSelect = document.getElementById('setupAuthMethod');
-            if (currentAuthMethod) {
+            const authSection = document.getElementById('setupAuthSection');
+
+            if (currentAuthMethod && currentAuthMethod !== 'None') {
+                authSection.classList.add('hidden');
+
                 let found = false;
                 for(let i=0; i<authSelect.options.length; i++) {
                     if(authSelect.options[i].value === currentAuthMethod) {
@@ -667,7 +687,7 @@
                         break;
                     }
                 }
-                if (!found && currentAuthMethod !== '') {
+                if (!found) {
                     const opt = document.createElement('option');
                     opt.value = currentAuthMethod;
                     opt.innerHTML = currentAuthMethod;
@@ -675,6 +695,7 @@
                     authSelect.value = currentAuthMethod;
                 }
             } else {
+                authSection.classList.remove('hidden');
                 authSelect.value = 'None';
             }
 
@@ -729,6 +750,7 @@
                 const apiKey = document.getElementById('setupApiKey').value;
                 const host = document.getElementById('setupHost').value.trim() || 'localhost';
                 const authMethod = document.getElementById('setupAuthMethod').value;
+                const authRequired = document.getElementById('setupAuthRequired').value;
                 const username = document.getElementById('setupUsername').value;
                 const password = document.getElementById('setupPassword').value;
                 const rootFolder = document.getElementById('setupRootFolder').value.trim();
@@ -740,6 +762,7 @@
                         api_key: apiKey,
                         host: host,
                         auth_method: authMethod,
+                        auth_required: authRequired,
                         username: username,
                         password: password,
                         root_folder: rootFolder
