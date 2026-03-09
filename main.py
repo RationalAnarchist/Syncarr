@@ -1,3 +1,5 @@
+import sqlite3
+import xml.etree.ElementTree as ET
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi import HTTPException
@@ -30,6 +32,14 @@ class LinkDownloadersRequest(BaseModel):
 class AppLinkInfo(BaseModel):
     api_key: str
     hostname: str = "localhost"
+
+class SetupAppRequest(BaseModel):
+    api_key: str
+    host: str = "localhost"
+    auth_method: str = "None"
+    username: Optional[str] = ""
+    password: Optional[str] = ""
+    root_folder: Optional[str] = ""
 
 class LinkOverseerrRequest(BaseModel):
     api_key: str
@@ -144,12 +154,111 @@ def update_settings(request: UpdateSettingsRequest):
     return JSONResponse(content={"status": "success", "message": "Settings updated successfully."})
 
 
+@app.post("/api/setup")
+async def setup_app(request: SetupAppRequest):
+    """
+    Endpoint to setup Sonarr or Radarr.
+    """
+    discovered_apps = scan_configs(get_configs_dir())
+
+    app_config = next((app for app in discovered_apps if app.get('apiKey') == request.api_key), None)
+    if not app_config:
+        raise HTTPException(status_code=404, detail=f"App with given API key not found.")
+
+    filepath = app_config['path']
+    try:
+        tree = ET.parse(filepath)
+        root = tree.getroot()
+
+        # Helper to update or add element
+        def update_or_add(tag, text):
+            elem = root.find(tag)
+            if elem is None:
+                elem = ET.SubElement(root, tag)
+            elem.text = text
+
+        update_or_add("AuthenticationMethod", request.auth_method)
+        if request.auth_method != "None":
+            update_or_add("Username", request.username)
+            update_or_add("Password", request.password)
+
+        tree.write(filepath, encoding="utf-8", xml_declaration=False)
+    except Exception as e:
+        logger.error(f"Failed to update config.xml: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update config.xml: {e}")
+
+    if request.root_folder:
+        app_ip = request.host
+        app_port = app_config['port']
+        app_api_key = app_config['apiKey']
+        app_url_base = app_config.get('urlBase', '')
+        app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+
+        url = f"{app_url}/api/v3/rootfolder"
+        headers = {"X-Api-Key": app_api_key}
+        payload = {"path": request.root_folder}
+
+        async with httpx.AsyncClient() as client:
+            try:
+                # First check if it exists
+                response = await client.get(url, headers=headers)
+                if response.status_code == 200:
+                    existing_folders = response.json()
+                    for f in existing_folders:
+                        if f.get('path') == request.root_folder:
+                            return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
+
+                # If not, add it
+                post_response = await client.post(url, headers=headers, json=payload)
+                if post_response.status_code not in (200, 201):
+                    logger.error(f"Failed to add root folder: {post_response.status_code} - {post_response.text}")
+                    raise HTTPException(status_code=500, detail=f"Failed to add root folder: {post_response.text}")
+            except httpx.RequestError as e:
+                logger.error(f"Failed to connect to app: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to connect to app to add root folder: {e}")
+
+    return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
+
 @app.get("/api/discover")
 def discover_apps():
     """
     Endpoint to trigger the scan on the config path and return the discovered apps.
     """
     discovered_apps = scan_configs(get_configs_dir())
+
+    # Check root folders for Sonarr and Radarr directly from their SQLite DBs
+    for app in discovered_apps:
+        app_name = app['app'].lower()
+        if app_name in ['sonarr', 'radarr']:
+            config_path = app['path']
+            db_path = os.path.join(os.path.dirname(config_path), f"{app_name}.db")
+
+            has_root_folders = False
+            root_folders = []
+            if os.path.exists(db_path):
+                try:
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    # First check if the RootFolders table exists
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='RootFolders'")
+                    if cursor.fetchone():
+                        cursor.execute("SELECT COUNT(*) FROM RootFolders")
+                        count = cursor.fetchone()[0]
+                        if count > 0:
+                            has_root_folders = True
+                    conn.close()
+                except Exception as e:
+                    logger.debug(f"Failed to query SQLite DB {db_path}: {e}")
+            else:
+                logger.debug(f"Database file not found: {db_path}")
+
+            app['rootFolders'] = root_folders
+
+            auth_method = app.get('authMethod', 'None')
+            is_auth_configured = auth_method != 'None' and auth_method != ''
+
+            app['isSetupComplete'] = is_auth_configured and has_root_folders
+
     return JSONResponse(content={"status": "success", "data": discovered_apps})
 
 @app.post("/api/backup")

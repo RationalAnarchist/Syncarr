@@ -23,12 +23,14 @@ def parse_config(filepath):
         api_key = get_tag_text("ApiKey")
         port = get_tag_text("Port")
         url_base = get_tag_text("UrlBase")
+        auth_method = get_tag_text("AuthenticationMethod")
 
         # Require at least Port to be useful. ApiKey is also generally required for *arr apps.
         if port:
             config_data["ApiKey"] = api_key
             config_data["Port"] = port
             config_data["UrlBase"] = url_base
+            config_data["AuthenticationMethod"] = auth_method
             return config_data
         return None
     except Exception as e:
@@ -103,7 +105,8 @@ def scan_configs(base_dir):
                         "apiKey": config_data.get("ApiKey"),
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),
-                        "linkedApiKeys": config_data.get("LinkedApiKeys", [])
+                        "linkedApiKeys": config_data.get("LinkedApiKeys", []),
+                        "authMethod": config_data.get("AuthenticationMethod")
                     })
             elif file.lower() == 'settings.json':
                 filepath = os.path.join(root, file)
@@ -117,7 +120,8 @@ def scan_configs(base_dir):
                         "apiKey": config_data.get("ApiKey"),
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),
-                        "linkedApiKeys": config_data.get("LinkedApiKeys", [])
+                        "linkedApiKeys": config_data.get("LinkedApiKeys", []),
+                        "authMethod": config_data.get("AuthenticationMethod")
                     })
 
     return discovered_apps
