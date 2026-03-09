@@ -152,7 +152,12 @@
                 </button>
             </div>
             <div class="p-6 space-y-4">
-                <input type="hidden" id="setupAppName">
+                <input type="hidden" id="setupApiKey">
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="cursor-help text-gray-500 hover:text-gray-300">ⓘ</span></label>
+                    <input type="text" id="setupHost" value="localhost" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="localhost">
+                </div>
 
                 <div>
                     <label class="block text-sm font-medium text-gray-400 mb-1">Authentication Method</label>
@@ -422,7 +427,7 @@
             if (isSelectable && !isSetupComplete) {
                 setupAction = `
                     <div class="mt-4 pt-4 border-t border-gray-700">
-                        <button onclick="event.stopPropagation(); openSetupModal('${appData.app}', '${appData.authMethod || 'None'}')" class="w-full bg-[#38A169] hover:bg-[#2F855A] text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center relative z-20">
+                        <button onclick="event.stopPropagation(); openSetupModal('${appData.app}', '${appData.authMethod || 'None'}', '${appData.apiKey}')" class="w-full bg-[#38A169] hover:bg-[#2F855A] text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center relative z-20">
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                             Complete Setup
                         </button>
@@ -637,8 +642,19 @@
             fetchSettings();
         });
 
-        function openSetupModal(appName, currentAuthMethod) {
-            document.getElementById('setupAppName').value = appName;
+        function openSetupModal(appName, currentAuthMethod, apiKey) {
+            document.getElementById('setupApiKey').value = apiKey;
+
+            // Try to pre-fill the host if the user typed something into the card's hostname input
+            let hostValue = 'localhost';
+            if (apiKey) {
+                const hostInput = document.getElementById('hostname-' + apiKey);
+                if (hostInput && hostInput.value.trim() !== '') {
+                    hostValue = hostInput.value.trim();
+                }
+            }
+            document.getElementById('setupHost').value = hostValue;
+
             document.getElementById('setupModalTitle').innerText = 'Setup ' + appName;
 
             const authSelect = document.getElementById('setupAuthMethod');
@@ -710,7 +726,8 @@
             `;
 
             try {
-                const appName = document.getElementById('setupAppName').value;
+                const apiKey = document.getElementById('setupApiKey').value;
+                const host = document.getElementById('setupHost').value.trim() || 'localhost';
                 const authMethod = document.getElementById('setupAuthMethod').value;
                 const username = document.getElementById('setupUsername').value;
                 const password = document.getElementById('setupPassword').value;
@@ -720,7 +737,8 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        app_name: appName,
+                        api_key: apiKey,
+                        host: host,
                         auth_method: authMethod,
                         username: username,
                         password: password,
@@ -734,7 +752,7 @@
                     throw new Error(data.detail || 'Failed to save setup.');
                 }
 
-                showToast('Setup Saved', `${appName} has been successfully configured.`);
+                showToast('Setup Saved', `App has been successfully configured.`);
                 closeSetupModal();
                 discoverApps();
             } catch (err) {

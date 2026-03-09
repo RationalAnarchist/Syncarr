@@ -1,3 +1,4 @@
+import sqlite3
 import xml.etree.ElementTree as ET
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -33,7 +34,8 @@ class AppLinkInfo(BaseModel):
     hostname: str = "localhost"
 
 class SetupAppRequest(BaseModel):
-    app_name: str
+    api_key: str
+    host: str = "localhost"
     auth_method: str = "None"
     username: Optional[str] = ""
     password: Optional[str] = ""
@@ -159,9 +161,9 @@ async def setup_app(request: SetupAppRequest):
     """
     discovered_apps = scan_configs(get_configs_dir())
 
-    app_config = next((app for app in discovered_apps if app['app'].lower() == request.app_name.lower()), None)
+    app_config = next((app for app in discovered_apps if app.get('apiKey') == request.api_key), None)
     if not app_config:
-        raise HTTPException(status_code=404, detail=f"App {request.app_name} not found.")
+        raise HTTPException(status_code=404, detail=f"App with given API key not found.")
 
     filepath = app_config['path']
     try:
@@ -186,7 +188,7 @@ async def setup_app(request: SetupAppRequest):
         raise HTTPException(status_code=500, detail=f"Failed to update config.xml: {e}")
 
     if request.root_folder:
-        app_ip = "localhost"
+        app_ip = request.host
         app_port = app_config['port']
         app_api_key = app_config['apiKey']
         app_url_base = app_config.get('urlBase', '')
@@ -218,42 +220,44 @@ async def setup_app(request: SetupAppRequest):
     return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
 
 @app.get("/api/discover")
-async def discover_apps():
+def discover_apps():
     """
     Endpoint to trigger the scan on the config path and return the discovered apps.
     """
     discovered_apps = scan_configs(get_configs_dir())
 
-    # Check root folders for Sonarr and Radarr
-    async with httpx.AsyncClient() as client:
-        for app in discovered_apps:
-            app_name = app['app'].lower()
-            if app_name in ['sonarr', 'radarr']:
-                app_ip = "localhost" # Docker container or local
-                app_port = app['port']
-                app_api_key = app['apiKey']
-                app_url_base = app.get('urlBase', '')
-                app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+    # Check root folders for Sonarr and Radarr directly from their SQLite DBs
+    for app in discovered_apps:
+        app_name = app['app'].lower()
+        if app_name in ['sonarr', 'radarr']:
+            config_path = app['path']
+            db_path = os.path.join(os.path.dirname(config_path), f"{app_name}.db")
 
-                url = f"{app_url}/api/v3/rootfolder"
-                headers = {"X-Api-Key": app_api_key}
-
-                root_folders = []
+            has_root_folders = False
+            root_folders = []
+            if os.path.exists(db_path):
                 try:
-                    # In test environment, the app might not be running. We need to handle connection errors.
-                    response = await client.get(url, headers=headers, timeout=2.0)
-                    if response.status_code == 200:
-                        root_folders = response.json()
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    # First check if the RootFolders table exists
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='RootFolders'")
+                    if cursor.fetchone():
+                        cursor.execute("SELECT COUNT(*) FROM RootFolders")
+                        count = cursor.fetchone()[0]
+                        if count > 0:
+                            has_root_folders = True
+                    conn.close()
                 except Exception as e:
-                    logger.debug(f"Failed to fetch root folders for {app_name}: {e}")
+                    logger.debug(f"Failed to query SQLite DB {db_path}: {e}")
+            else:
+                logger.debug(f"Database file not found: {db_path}")
 
-                app['rootFolders'] = root_folders
+            app['rootFolders'] = root_folders
 
-                auth_method = app.get('authMethod', 'None')
-                is_auth_configured = auth_method != 'None' and auth_method != ''
-                has_root_folders = len(root_folders) > 0
+            auth_method = app.get('authMethod', 'None')
+            is_auth_configured = auth_method != 'None' and auth_method != ''
 
-                app['isSetupComplete'] = is_auth_configured and has_root_folders
+            app['isSetupComplete'] = is_auth_configured and has_root_folders
 
     return JSONResponse(content={"status": "success", "data": discovered_apps})
 
