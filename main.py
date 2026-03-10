@@ -378,7 +378,6 @@ async def setup_overseerr(request: SetupOverseerrRequest):
         "ip": request.plex_ip,
         "port": request.plex_port,
         "useSsl": False,
-        "machineId": "syncarr-mock-machine-id", # This is generally retrieved from Plex API but required for bypass
         "token": request.plex_token
     }
 
