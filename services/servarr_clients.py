@@ -77,9 +77,9 @@ async def add_download_client(app_url: str, app_api_key: str, payload: dict):
         response.raise_for_status()
         return response.json()
 
-async def update_quality_definitions(app_url: str, app_api_key: str, mb_per_min: float):
+async def update_quality_definitions(app_url: str, app_api_key: str, min_mb_per_min: float, max_mb_per_min: float, preferred_mb_per_min: float):
     """
-    Updates all quality definitions to use the specified MB/min value for min, max, and preferred.
+    Updates all quality definitions to use the specified MB/min values for min, max, and preferred.
     """
     url = f"{app_url}/api/v3/qualitydefinition"
     headers = {"X-Api-Key": app_api_key}
@@ -94,9 +94,20 @@ async def update_quality_definitions(app_url: str, app_api_key: str, mb_per_min:
         # Update all definitions
         for df in definitions:
             # We must inspect to identify the correct size-related keys
-            for key in ["minSize", "maxSize", "preferredSize", "min", "max", "preferred"]:
-                if key in df:
-                    df[key] = mb_per_min
+            if "minSize" in df:
+                df["minSize"] = min_mb_per_min
+            elif "min" in df:
+                df["min"] = min_mb_per_min
+
+            if "maxSize" in df:
+                df["maxSize"] = max_mb_per_min
+            elif "max" in df:
+                df["max"] = max_mb_per_min
+
+            if "preferredSize" in df:
+                df["preferredSize"] = preferred_mb_per_min
+            elif "preferred" in df:
+                df["preferred"] = preferred_mb_per_min
 
             def_id = df.get('id')
             if def_id:

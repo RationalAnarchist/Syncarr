@@ -388,23 +388,40 @@
             }
         }
 
-        function updateQualityTooltip(input, apiKey) {
+        function updateQualityTooltip(apiKey) {
             const tooltip = document.getElementById('quality-tooltip-' + apiKey);
-            const val = parseFloat(input.value);
-            if (isNaN(val) || val <= 0) {
-                tooltip.innerText = 'Enter a value to see estimated size.';
+            const minInput = document.getElementById('quality-min-' + apiKey);
+            const maxInput = document.getElementById('quality-max-' + apiKey);
+            const prefInput = document.getElementById('quality-pref-' + apiKey);
+
+            const minVal = parseFloat(minInput.value);
+            const maxVal = parseFloat(maxInput.value);
+            const prefVal = parseFloat(prefInput.value);
+
+            if (isNaN(minVal) || isNaN(maxVal) || isNaN(prefVal) || minVal <= 0 || maxVal <= 0 || prefVal <= 0) {
+                tooltip.innerText = 'Enter values to see estimated sizes.';
                 return;
             }
+
             // Size in GB for a 60-minute file: (MB/min * 60) / 1024
-            const sizeGB = ((val * 60) / 1024).toFixed(2);
-            tooltip.innerHTML = `Estimated size for 1 hour: <b>${sizeGB} GB</b>`;
+            const minGB = ((minVal * 60) / 1024).toFixed(2);
+            const maxGB = ((maxVal * 60) / 1024).toFixed(2);
+            const prefGB = ((prefVal * 60) / 1024).toFixed(2);
+
+            tooltip.innerHTML = `Estimated sizes for 1 hour: <b>${minGB} GB - ${maxGB} GB</b> (Preferred: <b>${prefGB} GB</b>)`;
         }
 
         async function updateQuality(apiKey) {
-            const input = document.getElementById('quality-' + apiKey);
-            const val = parseFloat(input.value);
-            if (isNaN(val) || val <= 0) {
-                showToast('Error', 'Please enter a valid number greater than 0 for MB/min.', true);
+            const minInput = document.getElementById('quality-min-' + apiKey);
+            const maxInput = document.getElementById('quality-max-' + apiKey);
+            const prefInput = document.getElementById('quality-pref-' + apiKey);
+
+            const minVal = parseFloat(minInput.value);
+            const maxVal = parseFloat(maxInput.value);
+            const prefVal = parseFloat(prefInput.value);
+
+            if (isNaN(minVal) || isNaN(maxVal) || isNaN(prefVal) || minVal <= 0 || maxVal <= 0 || prefVal <= 0) {
+                showToast('Error', 'Please enter valid numbers greater than 0 for MB/min fields.', true);
                 return;
             }
 
@@ -416,7 +433,9 @@
                         apps_to_update: [
                             {
                                 api_key: apiKey,
-                                mb_per_min: val
+                                min_mb_per_min: minVal,
+                                max_mb_per_min: maxVal,
+                                preferred_mb_per_min: prefVal
                             }
                         ]
                     })
@@ -544,14 +563,27 @@
             if (['sonarr', 'radarr'].includes(appData.app.toLowerCase())) {
                 qualityAction = `
                     <div class="mt-4 pt-4 border-t border-gray-700">
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Quality Definition (MB/min)</label>
-                        <div class="flex space-x-2">
-                            <input type="number" id="quality-${appData.apiKey}" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="e.g. 100" min="0" step="0.1" oninput="updateQualityTooltip(this, '${appData.apiKey}')">
-                            <button onclick="updateQuality('${appData.apiKey}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition text-sm flex-shrink-0">
+                        <label class="block text-xs font-medium text-gray-400 mb-2">Quality Definition (MB/min)</label>
+                        <div class="flex flex-col space-y-2 mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-400 w-16">Min</span>
+                                <input type="number" id="quality-min-${appData.apiKey}" onclick="event.stopPropagation()" class="flex-1 bg-gray-900 text-white px-2 py-1 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="e.g. 10" min="0" step="0.1" oninput="updateQualityTooltip('${appData.apiKey}')">
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-400 w-16">Preferred</span>
+                                <input type="number" id="quality-pref-${appData.apiKey}" onclick="event.stopPropagation()" class="flex-1 bg-gray-900 text-white px-2 py-1 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="e.g. 100" min="0" step="0.1" oninput="updateQualityTooltip('${appData.apiKey}')">
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-400 w-16">Max</span>
+                                <input type="number" id="quality-max-${appData.apiKey}" onclick="event.stopPropagation()" class="flex-1 bg-gray-900 text-white px-2 py-1 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="e.g. 400" min="0" step="0.1" oninput="updateQualityTooltip('${appData.apiKey}')">
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-3">
+                            <p class="text-xs text-gray-500 flex-1" id="quality-tooltip-${appData.apiKey}">Enter values to see estimated sizes.</p>
+                            <button onclick="event.stopPropagation(); updateQuality('${appData.apiKey}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition text-sm flex-shrink-0">
                                 Set Quality
                             </button>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1" id="quality-tooltip-${appData.apiKey}">Enter a value to see estimated size.</p>
                     </div>
                 `;
             }

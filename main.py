@@ -31,7 +31,9 @@ class LinkDownloadersRequest(BaseModel):
 
 class AppQualityRequest(BaseModel):
     api_key: str
-    mb_per_min: float
+    min_mb_per_min: float
+    max_mb_per_min: float
+    preferred_mb_per_min: float
 
 class UpdateQualityRequest(BaseModel):
     apps_to_update: list[AppQualityRequest] = []
@@ -466,12 +468,14 @@ async def update_quality(request: UpdateQualityRequest):
         # Use full URL if URL base exists
         app_url = f"http://{app_ip}:{app_port}{app_url_base}"
 
-        logger.debug(f"Attempting to update quality definitions for {app_name} at {app_url} to {app_to_update.mb_per_min} MB/min")
+        logger.debug(f"Attempting to update quality definitions for {app_name} at {app_url}")
         try:
             result = await update_quality_definitions(
                 app_url=app_url,
                 app_api_key=app_api_key,
-                mb_per_min=app_to_update.mb_per_min
+                min_mb_per_min=app_to_update.min_mb_per_min,
+                max_mb_per_min=app_to_update.max_mb_per_min,
+                preferred_mb_per_min=app_to_update.preferred_mb_per_min
             )
             logger.info(f"Successfully updated quality definitions for {app_name}")
             results.append({"app": app_name, "status": "success", "result": result})
