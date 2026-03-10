@@ -36,19 +36,11 @@ class AppLinkInfo(BaseModel):
 class SetupAppRequest(BaseModel):
     api_key: str
     host: str = "localhost"
-    auth_method: str = "None"
-    auth_required: str = "Enabled"
-    username: Optional[str] = ""
-    password: Optional[str] = ""
-    root_folder: Optional[str] = ""
-
-class SetupOverseerrRequest(BaseModel):
-    api_key: str
-    overseerr_host: str = "localhost"
-    overseerr_port: int = 5055
-    plex_ip: str
-    plex_port: int = 32400
-    plex_token: str
+    auth_method: Optional[str] = None
+    auth_required: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    root_folder: Optional[str] = None
 
 class LinkOverseerrRequest(BaseModel):
     api_key: str
@@ -186,15 +178,15 @@ async def setup_app(request: SetupAppRequest):
                 elem = ET.SubElement(root, tag)
             elem.text = text
 
-        update_or_add("AuthenticationMethod", request.auth_method)
-        if request.auth_method != "None":
-            # Only update these if provided (so we don't wipe out existing credentials when setting up just the root folder)
-            if request.auth_required:
-                update_or_add("AuthenticationRequired", request.auth_required)
-            if request.username:
-                update_or_add("Username", request.username)
-            if request.password:
-                update_or_add("Password", request.password)
+        if request.auth_method is not None:
+            update_or_add("AuthenticationMethod", request.auth_method)
+            if request.auth_method != "None":
+                if request.auth_required is not None:
+                    update_or_add("AuthenticationRequired", request.auth_required)
+                if request.username is not None:
+                    update_or_add("Username", request.username)
+                if request.password is not None:
+                    update_or_add("Password", request.password)
 
         tree.write(filepath, encoding="utf-8", xml_declaration=False)
     except Exception as e:
@@ -365,44 +357,6 @@ async def link_prowlarr():
         "results": results,
         "errors": errors
     })
-
-@app.post("/api/setup/overseerr")
-async def setup_overseerr(request: SetupOverseerrRequest):
-    """
-    Endpoint to setup Overseerr initial Plex configuration.
-    """
-    overseerr_url = f"http://{request.overseerr_host}:{request.overseerr_port}"
-    headers = {"X-Api-Key": request.api_key}
-
-    plex_payload = {
-        "ip": request.plex_ip,
-        "port": request.plex_port,
-        "useSsl": False,
-        "token": request.plex_token
-    }
-
-    async with httpx.AsyncClient() as client:
-        try:
-            # Create a redacted payload for logging
-            redacted_payload = plex_payload.copy()
-            redacted_payload["token"] = "***REDACTED***"
-            logger.debug(f"Sending Plex payload to {overseerr_url}/api/v1/settings/plex: {redacted_payload}")
-
-            response = await client.post(f"{overseerr_url}/api/v1/settings/plex", headers=headers, json=plex_payload)
-            response.raise_for_status()
-
-            # Now trigger initialization
-            init_response = await client.post(f"{overseerr_url}/api/v1/settings/initialize", headers=headers)
-            init_response.raise_for_status()
-
-            return JSONResponse(content={"status": "success", "message": "Overseerr setup successfully initialized with Plex."})
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
-            raise HTTPException(status_code=500, detail=f"Overseerr setup HTTP error: {e.response.status_code}")
-        except Exception as e:
-            logger.error(f"Error: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/link/overseerr")
 async def link_overseerr(request: LinkOverseerrRequest):
