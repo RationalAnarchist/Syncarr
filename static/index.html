@@ -273,8 +273,11 @@
             `;
 
             try {
-                const overseerrHostInput = document.getElementById('hostname-overseerr');
-                const overseerrHost = overseerrHostInput ? overseerrHostInput.value.trim() || 'localhost' : 'localhost';
+                const overseerrApp = allDiscoveredApps.find(a => a.app.toLowerCase() === 'overseerr');
+                let overseerrHost = 'localhost';
+                if (overseerrApp) {
+                    overseerrHost = appHostnames[overseerrApp.apiKey] || overseerrApp.hostname || 'localhost';
+                }
                 const overseerrPortInput = document.getElementById('port-overseerr');
                 const overseerrPort = overseerrPortInput ? parseInt(overseerrPortInput.value) || 5055 : 5055;
 
@@ -356,16 +359,49 @@
         let overseerrLinkedKeys = [];
         let allDiscoveredApps = [];
         let appHostnames = {};
-        let overseerrHostname = 'localhost';
+
+        async function saveHostname(apiKey, hostname) {
+            try {
+                const response = await fetch('/api/app/hostname', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: apiKey, hostname: hostname })
+                });
+                if (!response.ok) throw new Error('Failed to save hostname');
+            } catch (err) {
+                console.error(err);
+                showToast('Error', 'Failed to save hostname', true);
+            }
+        }
+
+        async function saveAppType(path, appType) {
+            try {
+                const response = await fetch('/api/app/type', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path, app_type: appType })
+                });
+                if (!response.ok) throw new Error('Failed to save app type');
+            } catch (err) {
+                console.error(err);
+                showToast('Error', 'Failed to save app type', true);
+            }
+        }
 
         function handleHostnameChange(apiKey, value) {
             if (apiKey) {
                 appHostnames[apiKey] = value;
+                saveHostname(apiKey, value);
             }
         }
 
-        function handleOverseerrHostnameChange(value) {
-            overseerrHostname = value;
+        function handleAppTypeChange(path, value) {
+            if (path && value) {
+                saveAppType(path, value).then(() => {
+                    showToast('Success', 'App type changed, rescanning...');
+                    discoverApps();
+                });
+            }
         }
 
         function toggleAppSelection(apiKey) {
@@ -383,6 +419,7 @@
             const urlBaseDisplay = appData.urlBase ? appData.urlBase : '/';
 
             const isSelectable = ['sonarr', 'radarr'].includes(appData.app.toLowerCase());
+            const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
             const isSelected = selectedApps.has(appData.apiKey);
 
             let cardClasses = `bg-servarrCard rounded-lg shadow-lg border border-servarrBorder overflow-hidden flex flex-col transition hover:border-gray-600`;
@@ -399,7 +436,10 @@
                             <input type="checkbox" class="w-5 h-5 rounded bg-gray-900 border-gray-700 text-servarrCyan focus:ring-servarrCyan cursor-pointer pointer-events-none" ${isSelected ? 'checked' : ''} />
                         </div>
                     `;
-                } else {
+                }
+            }
+            if (isSetupSupported) {
+                if (!isSetupComplete) {
                     selectionIndicator = `
                         <div class="absolute top-2 right-2 z-10">
                             <span class="px-2 py-0.5 bg-red-900/50 text-red-400 text-xs font-medium rounded border border-red-700">Setup Required</span>
@@ -423,17 +463,13 @@
                                 Action Required
                             </h4>
                             <p class="text-xs text-gray-400 mb-3">Before linking services, you must sign in to Plex via Overseerr's web interface to complete its initial setup. Once complete, click "Scan Now" at the top.</p>
-                            <a href="http://${overseerrHostname}:${overseerrPort}" target="_blank" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center cursor-pointer">
+                            <a href="http://${appData.hostname || appHostnames[appData.apiKey] || 'localhost'}:${overseerrPort}" target="_blank" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center cursor-pointer">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                                 Open Overseerr Setup
                             </a>
                         </div>
                         <div class="flex space-x-2 mb-3 pt-2">
-                            <div class="flex-1">
-                                <label for="hostname-overseerr" class="block text-xs font-medium text-gray-400 mb-1">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="cursor-help text-gray-500 hover:text-gray-300">ⓘ</span></label>
-                                <input type="text" id="hostname-overseerr" oninput="handleOverseerrHostnameChange(this.value)" value="${overseerrHostname}" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
-                            </div>
-                            <div class="w-24">
+                            <div class="w-full">
                                 <label for="port-overseerr" class="block text-xs font-medium text-gray-400 mb-1">Port</label>
                                 <input type="number" id="port-overseerr" value="${overseerrPort}" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
                             </div>
@@ -457,7 +493,7 @@
             }
 
             let setupAction = '';
-            if (isSelectable && !isSetupComplete) {
+            if (isSetupSupported && !isSetupComplete) {
                 setupAction = `
                     <div class="mt-4 pt-4 border-t border-gray-700">
                         <button onclick="event.stopPropagation(); openSetupModal('${appData.app}', '${appData.authMethod || 'None'}', '${appData.apiKey}')" class="w-full bg-[#38A169] hover:bg-[#2F855A] text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center relative z-20">
@@ -468,24 +504,27 @@
                 `;
             }
 
+            const appOptions = ['Sonarr', 'Radarr', 'Lidarr', 'Readarr', 'Prowlarr', 'Overseerr', 'Whisparr', 'Unknown'];
+            const selectOptions = appOptions.map(opt => `<option value="${opt}" ${opt.toLowerCase() === appData.app.toLowerCase() ? 'selected' : ''}>${opt}</option>`).join('');
+
             return `
                 <div class="${cardClasses} relative ${isSelectable && isSetupComplete ? 'cursor-pointer' : ''}" ${isSelectable && isSetupComplete ? `onclick="toggleAppSelection('${appData.apiKey}')"` : ''}>
                     ${selectionIndicator}
                     <div class="h-1 ${accentColor} w-full"></div>
                     <div class="p-5 flex-1 flex flex-col relative">
                         <div class="flex items-center mb-4 pr-6">
-                            <h3 class="text-xl font-bold text-white">${appData.app}</h3>
+                            <select onclick="event.stopPropagation()" onchange="handleAppTypeChange('${appData.path}', this.value)" class="text-xl font-bold text-white bg-transparent border-none appearance-none cursor-pointer focus:outline-none focus:ring-0">
+                                ${selectOptions}
+                            </select>
                             ${linkedBadge}
                             <span class="ml-auto px-2.5 py-1 bg-gray-800 text-xs font-medium rounded text-gray-300 border border-gray-700">Port ${appData.port}</span>
                         </div>
 
                         <div class="space-y-3 flex-1">
-                            ${isSelectable ? `
                             <div>
                                 <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider flex items-center">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="ml-1 cursor-help text-gray-400 hover:text-white">ⓘ</span></label>
-                                <input type="text" id="hostname-${appData.apiKey}" oninput="handleHostnameChange('${appData.apiKey}', this.value)" onclick="event.stopPropagation()" value="${appHostnames[appData.apiKey] || 'localhost'}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
+                                <input type="text" id="hostname-${appData.apiKey}" onchange="handleHostnameChange('${appData.apiKey}', this.value)" onclick="event.stopPropagation()" value="${appData.hostname || appHostnames[appData.apiKey] || 'localhost'}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
                             </div>
-                            ` : ''}
                             <div>
                                 <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">API Key</label>
                                 <div class="mt-1 flex items-center bg-gray-900 rounded border border-gray-700 p-2">

@@ -67,11 +67,15 @@ def parse_settings_json(filepath):
         print(f"Error parsing {filepath}: {e}")
         return None
 
-def identify_app(filepath, config_data):
+def identify_app(filepath, config_data, settings_data=None):
     """
     Guesses the app based on the directory name.
     Falls back to unknown if not in the KNOWN_APPS list.
     """
+    if settings_data and 'app_types' in settings_data:
+        if filepath in settings_data['app_types']:
+            return settings_data['app_types'][filepath].capitalize()
+
     parent_dir = os.path.basename(os.path.dirname(filepath)).lower()
 
     for app in KNOWN_APPS:
@@ -91,6 +95,17 @@ def scan_configs(base_dir):
         print(f"Directory {base_dir} does not exist.")
         return discovered_apps
 
+    settings_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "settings.json")
+    settings_data = {}
+    if os.path.exists(settings_file):
+        try:
+            with open(settings_file, "r", encoding='utf-8') as f:
+                settings_data = json.load(f)
+        except Exception as e:
+            print(f"Error reading settings file in scanner: {e}")
+
+    app_hostnames = settings_data.get("app_hostnames", {})
+
     for root, _, files in os.walk(base_dir):
         for file in files:
             if file.lower() == 'config.xml':
@@ -98,11 +113,13 @@ def scan_configs(base_dir):
                 config_data = parse_config(filepath)
 
                 if config_data:
-                    app_name = identify_app(filepath, config_data)
+                    app_name = identify_app(filepath, config_data, settings_data)
+                    api_key = config_data.get("ApiKey")
                     discovered_apps.append({
                         "app": app_name,
                         "path": filepath,
-                        "apiKey": config_data.get("ApiKey"),
+                        "hostname": app_hostnames.get(api_key, "localhost"),
+                        "apiKey": api_key,
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),
                         "linkedApiKeys": config_data.get("LinkedApiKeys", []),
@@ -113,11 +130,13 @@ def scan_configs(base_dir):
                 config_data = parse_settings_json(filepath)
 
                 if config_data:
-                    app_name = identify_app(filepath, config_data)
+                    app_name = identify_app(filepath, config_data, settings_data)
+                    api_key = config_data.get("ApiKey")
                     discovered_apps.append({
                         "app": app_name,
                         "path": filepath,
-                        "apiKey": config_data.get("ApiKey"),
+                        "hostname": app_hostnames.get(api_key, "localhost"),
+                        "apiKey": api_key,
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),
                         "linkedApiKeys": config_data.get("LinkedApiKeys", []),
