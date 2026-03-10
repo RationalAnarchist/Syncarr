@@ -242,6 +242,65 @@
             }, 3000);
         }
 
+        async function setupOverseerrPlex(apiKey) {
+            if (!apiKey) {
+                showToast('Error', 'Overseerr API Key missing.', true);
+                return;
+            }
+
+            const plexHostInput = document.getElementById('plex-hostname');
+            const plexPortInput = document.getElementById('plex-port');
+            const plexTokenInput = document.getElementById('plex-token');
+            const overseerrHostInput = document.getElementById('hostname-overseerr');
+            const overseerrPortInput = document.getElementById('port-overseerr');
+
+            if (!plexHostInput.value || !plexTokenInput.value) {
+                showToast('Error', 'Plex Hostname and Token are required.', true);
+                return;
+            }
+
+            const btn = document.getElementById('setupOverseerrPlexBtn');
+            const originalContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `
+                <svg class="animate-spin h-4 w-4 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Setting up...
+            `;
+
+            try {
+                const response = await fetch('/api/setup/overseerr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api_key: apiKey,
+                        overseerr_host: overseerrHostInput ? overseerrHostInput.value.trim() || 'localhost' : 'localhost',
+                        overseerr_port: overseerrPortInput ? parseInt(overseerrPortInput.value) || 5055 : 5055,
+                        plex_ip: plexHostInput.value.trim(),
+                        plex_port: parseInt(plexPortInput.value) || 32400,
+                        plex_token: plexTokenInput.value.trim()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to setup Overseerr Plex integration.');
+                }
+
+                showToast('Setup Complete', 'Overseerr has been initialized with Plex.');
+            } catch (err) {
+                showToast('Setup Failed', err.message, true);
+            } finally {
+                if(btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                }
+            }
+        }
+
         async function linkOverseerr(apiKey) {
             if (!apiKey) {
                 showToast('Error', 'Overseerr API Key missing.', true);
@@ -356,11 +415,25 @@
         let overseerrLinkedKeys = [];
         let allDiscoveredApps = [];
         let appHostnames = {};
+        let overseerrHostname = 'localhost';
+        let plexHostname = '';
+        let plexPort = 32400;
+        let plexToken = '';
 
         function handleHostnameChange(apiKey, value) {
             if (apiKey) {
                 appHostnames[apiKey] = value;
             }
+        }
+
+        function handleOverseerrHostnameChange(value) {
+            overseerrHostname = value;
+        }
+
+        function handlePlexChange(field, value) {
+            if (field === 'hostname') plexHostname = value;
+            if (field === 'port') plexPort = value;
+            if (field === 'token') plexToken = value;
         }
 
         function toggleAppSelection(apiKey) {
@@ -411,10 +484,31 @@
             if (appData.app.toLowerCase() === 'overseerr') {
                 linkButton = `
                     <div class="mt-4 pt-4 border-t border-gray-700">
-                        <div class="flex space-x-2 mb-3">
+                        <div class="mb-4">
+                            <h4 class="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">Overseerr Initial Plex Setup</h4>
+                            <div class="flex space-x-2 mb-2">
+                                <div class="flex-1">
+                                    <label class="block text-xs font-medium text-gray-400 mb-1">Plex Hostname / IP</label>
+                                    <input type="text" id="plex-hostname" oninput="handlePlexChange('hostname', this.value)" value="${plexHostname}" placeholder="localhost" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                                </div>
+                                <div class="w-24">
+                                    <label class="block text-xs font-medium text-gray-400 mb-1">Plex Port</label>
+                                    <input type="number" id="plex-port" oninput="handlePlexChange('port', this.value)" value="${plexPort}" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Plex Token</label>
+                                <input type="password" id="plex-token" oninput="handlePlexChange('token', this.value)" value="${plexToken}" placeholder="your_plex_token" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                            </div>
+                            <button onclick="setupOverseerrPlex('${appData.apiKey}')" id="setupOverseerrPlexBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                Setup Overseerr
+                            </button>
+                        </div>
+                        <div class="flex space-x-2 mb-3 pt-4 border-t border-gray-700">
                             <div class="flex-1">
                                 <label for="hostname-overseerr" class="block text-xs font-medium text-gray-400 mb-1">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="cursor-help text-gray-500 hover:text-gray-300">ⓘ</span></label>
-                                <input type="text" id="hostname-overseerr" value="localhost" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                                <input type="text" id="hostname-overseerr" oninput="handleOverseerrHostnameChange(this.value)" value="${overseerrHostname}" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
                             </div>
                             <div class="w-24">
                                 <label for="port-overseerr" class="block text-xs font-medium text-gray-400 mb-1">Port</label>
