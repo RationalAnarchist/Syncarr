@@ -250,14 +250,32 @@ async def setup_app(request: SetupAppRequest):
     headers = {"X-Api-Key": app_api_key}
 
     if request.root_folder:
+        app_type = app_config['app'].lower()
         api_version = "v3"
-        if app_config['app'].lower() in ['lidarr', 'readarr']:
+        if app_type in ['lidarr', 'readarr']:
             api_version = "v1"
         url = f"{app_url}/api/{api_version}/rootfolder"
+
         payload = {"path": request.root_folder}
 
         async with httpx.AsyncClient() as client:
             try:
+                if app_type in ['lidarr', 'readarr']:
+                    payload["name"] = request.root_folder.strip('/').split('/')[-1] or "RootFolder"
+                    payload["defaultQualityProfileId"] = 1
+                    payload["defaultMetadataProfileId"] = 1
+
+                    try:
+                        qp_response = await client.get(f"{app_url}/api/{api_version}/qualityprofile", headers=headers)
+                        if qp_response.status_code == 200 and len(qp_response.json()) > 0:
+                            payload["defaultQualityProfileId"] = qp_response.json()[0].get("id", 1)
+
+                        mp_response = await client.get(f"{app_url}/api/{api_version}/metadataprofile", headers=headers)
+                        if mp_response.status_code == 200 and len(mp_response.json()) > 0:
+                            payload["defaultMetadataProfileId"] = mp_response.json()[0].get("id", 1)
+                    except httpx.RequestError as e:
+                        logger.debug(f"Failed to fetch profiles for {app_type}: {e}")
+
                 # First check if it exists
                 response = await client.get(url, headers=headers)
                 if response.status_code == 200:
