@@ -36,10 +36,11 @@ class AppLinkInfo(BaseModel):
 class SetupAppRequest(BaseModel):
     api_key: str
     host: str = "localhost"
-    auth_method: str = "None"
-    username: Optional[str] = ""
-    password: Optional[str] = ""
-    root_folder: Optional[str] = ""
+    auth_method: Optional[str] = None
+    auth_required: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    root_folder: Optional[str] = None
 
 class LinkOverseerrRequest(BaseModel):
     api_key: str
@@ -177,25 +178,30 @@ async def setup_app(request: SetupAppRequest):
                 elem = ET.SubElement(root, tag)
             elem.text = text
 
-        update_or_add("AuthenticationMethod", request.auth_method)
-        if request.auth_method != "None":
-            update_or_add("Username", request.username)
-            update_or_add("Password", request.password)
+        if request.auth_method is not None:
+            update_or_add("AuthenticationMethod", request.auth_method)
+            if request.auth_method != "None":
+                if request.auth_required is not None:
+                    update_or_add("AuthenticationRequired", request.auth_required)
+                if request.username is not None:
+                    update_or_add("Username", request.username)
+                if request.password is not None:
+                    update_or_add("Password", request.password)
 
         tree.write(filepath, encoding="utf-8", xml_declaration=False)
     except Exception as e:
         logger.error(f"Failed to update config.xml: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update config.xml: {e}")
 
-    if request.root_folder:
-        app_ip = request.host
-        app_port = app_config['port']
-        app_api_key = app_config['apiKey']
-        app_url_base = app_config.get('urlBase', '')
-        app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+    app_ip = request.host
+    app_port = app_config['port']
+    app_api_key = app_config['apiKey']
+    app_url_base = app_config.get('urlBase', '')
+    app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+    headers = {"X-Api-Key": app_api_key}
 
+    if request.root_folder:
         url = f"{app_url}/api/v3/rootfolder"
-        headers = {"X-Api-Key": app_api_key}
         payload = {"path": request.root_folder}
 
         async with httpx.AsyncClient() as client:
@@ -206,16 +212,26 @@ async def setup_app(request: SetupAppRequest):
                     existing_folders = response.json()
                     for f in existing_folders:
                         if f.get('path') == request.root_folder:
-                            return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
-
-                # If not, add it
-                post_response = await client.post(url, headers=headers, json=payload)
-                if post_response.status_code not in (200, 201):
-                    logger.error(f"Failed to add root folder: {post_response.status_code} - {post_response.text}")
-                    raise HTTPException(status_code=500, detail=f"Failed to add root folder: {post_response.text}")
+                            break
+                    else:
+                        # If not, add it
+                        post_response = await client.post(url, headers=headers, json=payload)
+                        if post_response.status_code not in (200, 201):
+                            logger.error(f"Failed to add root folder: {post_response.status_code} - {post_response.text}")
+                            raise HTTPException(status_code=500, detail=f"Failed to add root folder: {post_response.text}")
             except httpx.RequestError as e:
                 logger.error(f"Failed to connect to app: {e}")
                 raise HTTPException(status_code=500, detail=f"Failed to connect to app to add root folder: {e}")
+
+    # Restart the app
+    restart_url = f"{app_url}/api/v3/system/restart"
+    async with httpx.AsyncClient() as client:
+        try:
+            restart_response = await client.post(restart_url, headers=headers)
+            if restart_response.status_code not in (200, 201):
+                logger.error(f"Failed to restart app: {restart_response.status_code} - {restart_response.text}")
+        except httpx.RequestError as e:
+            logger.error(f"Failed to connect to app to restart: {e}")
 
     return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
 
@@ -374,7 +390,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
                 "activeProfileName": "",
                 "activeDirectory": "",
                 "is4k": False,
-                "isDefault": False
+                "isDefault": True
             }
 
             if app_name == 'radarr':

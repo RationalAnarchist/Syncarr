@@ -159,23 +159,32 @@
                     <input type="text" id="setupHost" value="localhost" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="localhost">
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Authentication Method</label>
-                    <select id="setupAuthMethod" onchange="toggleAuthFields()" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
-                        <option value="None">None</option>
-                        <option value="Basic">Basic</option>
-                        <option value="Forms">Forms</option>
-                    </select>
-                </div>
-
-                <div id="setupAuthFields" class="space-y-4 hidden">
+                <div id="setupAuthSection" class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
-                        <input type="text" id="setupUsername" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="admin">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Authentication Method</label>
+                        <select id="setupAuthMethod" onchange="toggleAuthFields()" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                            <option value="None">None</option>
+                            <option value="Basic">Basic</option>
+                            <option value="Forms">Forms</option>
+                        </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-1">Password</label>
-                        <input type="password" id="setupPassword" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+
+                    <div id="setupAuthFields" class="space-y-4 hidden">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Authentication Required</label>
+                            <select id="setupAuthRequired" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                                <option value="Enabled">Enabled</option>
+                                <option value="DisabledForLocalAddresses">Disabled for Local Addresses</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
+                            <input type="text" id="setupUsername" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="admin">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Password</label>
+                            <input type="password" id="setupPassword" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                        </div>
                     </div>
                 </div>
 
@@ -346,6 +355,18 @@
         let selectedApps = new Set();
         let overseerrLinkedKeys = [];
         let allDiscoveredApps = [];
+        let appHostnames = {};
+        let overseerrHostname = 'localhost';
+
+        function handleHostnameChange(apiKey, value) {
+            if (apiKey) {
+                appHostnames[apiKey] = value;
+            }
+        }
+
+        function handleOverseerrHostnameChange(value) {
+            overseerrHostname = value;
+        }
 
         function toggleAppSelection(apiKey) {
             if (!apiKey) return;
@@ -393,16 +414,28 @@
 
             let linkButton = '';
             if (appData.app.toLowerCase() === 'overseerr') {
+                const overseerrPort = appData.port || 5055;
                 linkButton = `
                     <div class="mt-4 pt-4 border-t border-gray-700">
-                        <div class="flex space-x-2 mb-3">
+                        <div class="mb-4 bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+                            <h4 class="text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 flex items-center">
+                                <svg class="w-4 h-4 text-blue-400 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Action Required
+                            </h4>
+                            <p class="text-xs text-gray-400 mb-3">Before linking services, you must sign in to Plex via Overseerr's web interface to complete its initial setup. Once complete, click "Scan Now" at the top.</p>
+                            <a href="http://${overseerrHostname}:${overseerrPort}" target="_blank" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center cursor-pointer">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                Open Overseerr Setup
+                            </a>
+                        </div>
+                        <div class="flex space-x-2 mb-3 pt-2">
                             <div class="flex-1">
                                 <label for="hostname-overseerr" class="block text-xs font-medium text-gray-400 mb-1">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="cursor-help text-gray-500 hover:text-gray-300">ⓘ</span></label>
-                                <input type="text" id="hostname-overseerr" value="localhost" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                                <input type="text" id="hostname-overseerr" oninput="handleOverseerrHostnameChange(this.value)" value="${overseerrHostname}" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
                             </div>
                             <div class="w-24">
                                 <label for="port-overseerr" class="block text-xs font-medium text-gray-400 mb-1">Port</label>
-                                <input type="number" id="port-overseerr" value="5055" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                                <input type="number" id="port-overseerr" value="${overseerrPort}" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
                             </div>
                         </div>
                         <button onclick="linkOverseerr('${appData.apiKey}')" id="linkOverseerrBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center">
@@ -450,7 +483,7 @@
                             ${isSelectable ? `
                             <div>
                                 <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider flex items-center">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="ml-1 cursor-help text-gray-400 hover:text-white">ⓘ</span></label>
-                                <input type="text" id="hostname-${appData.apiKey}" onclick="event.stopPropagation()" value="localhost" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
+                                <input type="text" id="hostname-${appData.apiKey}" oninput="handleHostnameChange('${appData.apiKey}', this.value)" onclick="event.stopPropagation()" value="${appHostnames[appData.apiKey] || 'localhost'}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
                             </div>
                             ` : ''}
                             <div>
@@ -658,7 +691,11 @@
             document.getElementById('setupModalTitle').innerText = 'Setup ' + appName;
 
             const authSelect = document.getElementById('setupAuthMethod');
-            if (currentAuthMethod) {
+            const authSection = document.getElementById('setupAuthSection');
+
+            if (currentAuthMethod && currentAuthMethod !== 'None') {
+                authSection.classList.add('hidden');
+
                 let found = false;
                 for(let i=0; i<authSelect.options.length; i++) {
                     if(authSelect.options[i].value === currentAuthMethod) {
@@ -667,7 +704,7 @@
                         break;
                     }
                 }
-                if (!found && currentAuthMethod !== '') {
+                if (!found) {
                     const opt = document.createElement('option');
                     opt.value = currentAuthMethod;
                     opt.innerHTML = currentAuthMethod;
@@ -675,6 +712,7 @@
                     authSelect.value = currentAuthMethod;
                 }
             } else {
+                authSection.classList.remove('hidden');
                 authSelect.value = 'None';
             }
 
@@ -728,22 +766,28 @@
             try {
                 const apiKey = document.getElementById('setupApiKey').value;
                 const host = document.getElementById('setupHost').value.trim() || 'localhost';
-                const authMethod = document.getElementById('setupAuthMethod').value;
-                const username = document.getElementById('setupUsername').value;
-                const password = document.getElementById('setupPassword').value;
                 const rootFolder = document.getElementById('setupRootFolder').value.trim();
+
+                const authSection = document.getElementById('setupAuthSection');
+                const isAuthHidden = authSection.classList.contains('hidden');
+
+                const payload = {
+                    api_key: apiKey,
+                    host: host,
+                    root_folder: rootFolder
+                };
+
+                if (!isAuthHidden) {
+                    payload.auth_method = document.getElementById('setupAuthMethod').value;
+                    payload.auth_required = document.getElementById('setupAuthRequired').value;
+                    payload.username = document.getElementById('setupUsername').value;
+                    payload.password = document.getElementById('setupPassword').value;
+                }
 
                 const response = await fetch('/api/setup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        api_key: apiKey,
-                        host: host,
-                        auth_method: authMethod,
-                        username: username,
-                        password: password,
-                        root_folder: rootFolder
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
