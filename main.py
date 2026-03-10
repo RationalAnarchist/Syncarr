@@ -52,8 +52,35 @@ class UpdateSettingsRequest(BaseModel):
     config_dir: str
     log_level: str = "INFO"
 
+class AppTypeOverrideRequest(BaseModel):
+    path: str
+    app_type: str
+
+class AppHostnameOverrideRequest(BaseModel):
+    api_key: str
+    hostname: str
 
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
+
+def load_settings():
+    settings = {}
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+        except Exception as e:
+            logger.error(f"Error reading settings file: {e}")
+    return settings
+
+def save_settings_dict(settings):
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=4)
+        return True
+    except Exception as e:
+        logger.error(f"Error writing settings file: {e}")
+        return False
+
 
 # Logging setup
 logger = logging.getLogger("syncarr")
@@ -129,13 +156,7 @@ def update_settings(request: UpdateSettingsRequest):
     """
     Endpoint to update the settings file.
     """
-    settings = {}
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r") as f:
-                settings = json.load(f)
-        except Exception:
-            pass
+    settings = load_settings()
 
     settings["config_dir"] = request.config_dir
     settings["log_level"] = request.log_level
@@ -146,14 +167,42 @@ def update_settings(request: UpdateSettingsRequest):
     for handler in logger.handlers:
         handler.setLevel(level)
 
-    try:
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(settings, f, indent=4)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save settings: {e}")
+    if not save_settings_dict(settings):
+        raise HTTPException(status_code=500, detail="Failed to save settings")
 
     return JSONResponse(content={"status": "success", "message": "Settings updated successfully."})
 
+@app.post("/api/app/type")
+def update_app_type(request: AppTypeOverrideRequest):
+    """
+    Endpoint to store custom app types.
+    """
+    settings = load_settings()
+    if "app_types" not in settings:
+        settings["app_types"] = {}
+
+    settings["app_types"][request.path] = request.app_type
+
+    if not save_settings_dict(settings):
+        raise HTTPException(status_code=500, detail="Failed to save app type")
+
+    return JSONResponse(content={"status": "success", "message": "App type updated successfully."})
+
+@app.post("/api/app/hostname")
+def update_app_hostname(request: AppHostnameOverrideRequest):
+    """
+    Endpoint to store custom app hostnames.
+    """
+    settings = load_settings()
+    if "app_hostnames" not in settings:
+        settings["app_hostnames"] = {}
+
+    settings["app_hostnames"][request.api_key] = request.hostname
+
+    if not save_settings_dict(settings):
+        raise HTTPException(status_code=500, detail="Failed to save app hostname")
+
+    return JSONResponse(content={"status": "success", "message": "App hostname updated successfully."})
 
 @app.post("/api/setup")
 async def setup_app(request: SetupAppRequest):
@@ -201,7 +250,10 @@ async def setup_app(request: SetupAppRequest):
     headers = {"X-Api-Key": app_api_key}
 
     if request.root_folder:
-        url = f"{app_url}/api/v3/rootfolder"
+        api_version = "v3"
+        if app_config['app'].lower() in ['lidarr', 'readarr']:
+            api_version = "v1"
+        url = f"{app_url}/api/{api_version}/rootfolder"
         payload = {"path": request.root_folder}
 
         async with httpx.AsyncClient() as client:
@@ -224,7 +276,10 @@ async def setup_app(request: SetupAppRequest):
                 raise HTTPException(status_code=500, detail=f"Failed to connect to app to add root folder: {e}")
 
     # Restart the app
-    restart_url = f"{app_url}/api/v3/system/restart"
+    api_version = "v3"
+    if app_config['app'].lower() in ['lidarr', 'readarr']:
+        api_version = "v1"
+    restart_url = f"{app_url}/api/{api_version}/system/restart"
     async with httpx.AsyncClient() as client:
         try:
             restart_response = await client.post(restart_url, headers=headers)
@@ -236,39 +291,37 @@ async def setup_app(request: SetupAppRequest):
     return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
 
 @app.get("/api/discover")
-def discover_apps():
+async def discover_apps():
     """
     Endpoint to trigger the scan on the config path and return the discovered apps.
     """
     discovered_apps = scan_configs(get_configs_dir())
 
-    # Check root folders for Sonarr and Radarr directly from their SQLite DBs
     for app in discovered_apps:
         app_name = app['app'].lower()
-        if app_name in ['sonarr', 'radarr']:
-            config_path = app['path']
-            db_path = os.path.join(os.path.dirname(config_path), f"{app_name}.db")
+        if app_name in ['sonarr', 'radarr', 'lidarr', 'readarr']:
+            app_ip = app.get('hostname', 'localhost')
+            app_port = app['port']
+            app_api_key = app['apiKey']
+            app_url_base = app.get('urlBase', '')
+            app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+            headers = {"X-Api-Key": app_api_key}
 
             has_root_folders = False
-            root_folders = []
-            if os.path.exists(db_path):
-                try:
-                    conn = sqlite3.connect(db_path)
-                    cursor = conn.cursor()
-                    # First check if the RootFolders table exists
-                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='RootFolders'")
-                    if cursor.fetchone():
-                        cursor.execute("SELECT COUNT(*) FROM RootFolders")
-                        count = cursor.fetchone()[0]
-                        if count > 0:
-                            has_root_folders = True
-                    conn.close()
-                except Exception as e:
-                    logger.debug(f"Failed to query SQLite DB {db_path}: {e}")
-            else:
-                logger.debug(f"Database file not found: {db_path}")
 
-            app['rootFolders'] = root_folders
+            api_version = "v3"
+            if app_name in ['lidarr', 'readarr']:
+                api_version = "v1"
+
+            try:
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    response = await client.get(f"{app_url}/api/{api_version}/rootfolder", headers=headers)
+                    if response.status_code == 200:
+                        folders = response.json()
+                        if folders and len(folders) > 0:
+                            has_root_folders = True
+            except Exception as e:
+                logger.debug(f"Failed to connect to {app_name} at {app_url} to check root folders: {e}")
 
             auth_method = app.get('authMethod', 'None')
             is_auth_configured = auth_method != 'None' and auth_method != ''
@@ -303,7 +356,7 @@ def backup_apps():
 @app.post("/api/link/prowlarr")
 async def link_prowlarr():
     """
-    Endpoint to automatically connect Sonarr and Radarr to Prowlarr.
+    Endpoint to automatically connect Sonarr, Radarr, Lidarr, and Readarr to Prowlarr.
     """
     discovered_apps = scan_configs(get_configs_dir())
 
@@ -312,7 +365,8 @@ async def link_prowlarr():
     if not prowlarr_config:
         raise HTTPException(status_code=400, detail="Prowlarr configuration not found.")
 
-    prowlarr_url = f"http://localhost:{prowlarr_config.get('port', '9696')}{prowlarr_config.get('urlBase', '')}"
+    prowlarr_ip = prowlarr_config.get('hostname', 'localhost')
+    prowlarr_url = f"http://{prowlarr_ip}:{prowlarr_config.get('port', '9696')}{prowlarr_config.get('urlBase', '')}"
     prowlarr_api_key = prowlarr_config.get('apiKey')
 
     if not prowlarr_api_key:
@@ -323,9 +377,9 @@ async def link_prowlarr():
 
     for app in discovered_apps:
         app_name = app['app']
-        if app_name.lower() in ['sonarr', 'radarr']:
+        if app_name.lower() in ['sonarr', 'radarr', 'lidarr', 'readarr']:
             logger.debug(f"Attempting to link {app_name} to Prowlarr at {prowlarr_url}")
-            app_ip = "localhost" # Defaulting to localhost since config.xml doesn't hold the actual IP
+            app_ip = app.get('hostname', 'localhost')
             app_port = app['port']
             app_api_key = app['apiKey']
             app_url_base = app.get('urlBase', '')
@@ -429,7 +483,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
 @app.post("/api/link/downloaders")
 async def link_downloaders(request: LinkDownloadersRequest):
     """
-    Endpoint to automatically connect Sonarr and Radarr to qBittorrent and NZBGet.
+    Endpoint to automatically connect Sonarr, Radarr, Lidarr, and Readarr to qBittorrent and NZBGet.
     """
     discovered_apps = scan_configs(get_configs_dir())
 
@@ -438,9 +492,9 @@ async def link_downloaders(request: LinkDownloadersRequest):
 
     for app in discovered_apps:
         app_name = app['app']
-        if app_name.lower() in ['sonarr', 'radarr']:
+        if app_name.lower() in ['sonarr', 'radarr', 'lidarr', 'readarr']:
             logger.debug(f"Attempting to link Downloaders to {app_name}")
-            app_ip = "localhost" # Defaulting to localhost since config.xml doesn't hold the actual IP
+            app_ip = app.get('hostname', 'localhost')
             app_port = app['port']
             app_api_key = app['apiKey']
             app_url_base = app.get('urlBase', '')
