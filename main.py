@@ -354,9 +354,29 @@ async def discover_apps():
                             prowlarr_apps = response.json()
                             linked_keys = []
                             for p_app in prowlarr_apps:
+                                # Extract both apiKey and baseUrl. apiKey is often redacted or omitted.
+                                p_api_key = None
+                                p_base_url = None
                                 for field in p_app.get('fields', []):
                                     if field.get('name') == 'apiKey' and field.get('value'):
-                                        linked_keys.append(field['value'])
+                                        p_api_key = field.get('value')
+                                    if field.get('name') == 'baseUrl' and field.get('value'):
+                                        p_base_url = field.get('value')
+
+                                # If we have a valid API key that doesn't look like a masked password
+                                if p_api_key and not p_api_key.startswith('<'):
+                                    linked_keys.append(p_api_key)
+                                elif p_base_url:
+                                    # Fallback: find the app in discovered_apps that matches this baseUrl
+                                    for disc_app in discovered_apps:
+                                        d_ip = disc_app.get('hostname', 'localhost')
+                                        d_port = disc_app['port']
+                                        d_url_base = disc_app.get('urlBase', '')
+                                        d_url = f"http://{d_ip}:{d_port}{d_url_base}".rstrip('/')
+                                        if d_url == p_base_url.rstrip('/') or disc_app['app'].lower() == p_app.get('name', '').lower():
+                                            linked_keys.append(disc_app['apiKey'])
+                                            break
+
                             app['linkedApiKeys'] = linked_keys
                 except Exception as e:
                     logger.debug(f"Failed to fetch linked applications from Prowlarr at {app_url}: {e}")
