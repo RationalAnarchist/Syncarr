@@ -5,7 +5,7 @@
   <SslPort>9697</SslPort>
   <EnableSsl>False</EnableSsl>
   <ApiKey>prowlarrtestkey1234567890</ApiKey>
-  <AuthenticationMethod>Basic</AuthenticationMethod>
+  <AuthenticationMethod>None</AuthenticationMethod>
   <LogLevel>info</LogLevel>
   <Branch>master</Branch>
   <LaunchBrowser>True</LaunchBrowser>

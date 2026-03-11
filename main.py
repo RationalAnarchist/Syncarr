@@ -310,7 +310,7 @@ async def setup_app(request: SetupAppRequest):
 
     # Restart the app
     api_version = "v3"
-    if app_config['app'].lower() in ['lidarr', 'readarr']:
+    if app_config['app'].lower() in ['lidarr', 'readarr', 'prowlarr']:
         api_version = "v1"
     restart_url = f"{app_url}/api/{api_version}/system/restart"
     async with httpx.AsyncClient() as client:
@@ -332,34 +332,37 @@ async def discover_apps():
 
     for app in discovered_apps:
         app_name = app['app'].lower()
-        if app_name in ['sonarr', 'radarr', 'lidarr', 'readarr']:
-            app_ip = app.get('hostname', 'localhost')
-            app_port = app['port']
-            app_api_key = app['apiKey']
-            app_url_base = app.get('urlBase', '')
-            app_url = f"http://{app_ip}:{app_port}{app_url_base}"
-            headers = {"X-Api-Key": app_api_key}
-
-            has_root_folders = False
-
-            api_version = "v3"
-            if app_name in ['lidarr', 'readarr']:
-                api_version = "v1"
-
-            try:
-                async with httpx.AsyncClient(timeout=3.0) as client:
-                    response = await client.get(f"{app_url}/api/{api_version}/rootfolder", headers=headers)
-                    if response.status_code == 200:
-                        folders = response.json()
-                        if folders and len(folders) > 0:
-                            has_root_folders = True
-            except Exception as e:
-                logger.debug(f"Failed to connect to {app_name} at {app_url} to check root folders: {e}")
-
+        if app_name in ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr']:
             auth_method = app.get('authMethod', 'None')
             is_auth_configured = auth_method != 'None' and auth_method != ''
 
-            app['isSetupComplete'] = is_auth_configured and has_root_folders
+            if app_name == 'prowlarr':
+                app['isSetupComplete'] = is_auth_configured
+            else:
+                app_ip = app.get('hostname', 'localhost')
+                app_port = app['port']
+                app_api_key = app['apiKey']
+                app_url_base = app.get('urlBase', '')
+                app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+                headers = {"X-Api-Key": app_api_key}
+
+                has_root_folders = False
+
+                api_version = "v3"
+                if app_name in ['lidarr', 'readarr']:
+                    api_version = "v1"
+
+                try:
+                    async with httpx.AsyncClient(timeout=3.0) as client:
+                        response = await client.get(f"{app_url}/api/{api_version}/rootfolder", headers=headers)
+                        if response.status_code == 200:
+                            folders = response.json()
+                            if folders and len(folders) > 0:
+                                has_root_folders = True
+                except Exception as e:
+                    logger.debug(f"Failed to connect to {app_name} at {app_url} to check root folders: {e}")
+
+                app['isSetupComplete'] = is_auth_configured and has_root_folders
 
     return JSONResponse(content={"status": "success", "data": discovered_apps})
 

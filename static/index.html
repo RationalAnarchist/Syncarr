@@ -554,7 +554,7 @@
             const urlBaseDisplay = appData.urlBase ? appData.urlBase : '/';
 
             const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
-            const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
+            const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr'].includes(appData.app.toLowerCase());
             const isSelected = selectedApps.has(appData.apiKey);
 
             let cardClasses = `bg-servarrCard rounded-lg shadow-lg border border-servarrBorder overflow-hidden flex flex-col transition hover:border-gray-600`;
