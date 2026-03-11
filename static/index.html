@@ -388,6 +388,73 @@
             }
         }
 
+        function updateQualityTooltip(apiKey) {
+            const tooltip = document.getElementById('quality-tooltip-' + apiKey);
+            const minInput = document.getElementById('quality-min-' + apiKey);
+            const maxInput = document.getElementById('quality-max-' + apiKey);
+            const prefInput = document.getElementById('quality-pref-' + apiKey);
+
+            const minVal = parseFloat(minInput.value);
+            const maxVal = parseFloat(maxInput.value);
+            const prefVal = parseFloat(prefInput.value);
+
+            if (isNaN(minVal) || isNaN(maxVal) || isNaN(prefVal) || minVal <= 0 || maxVal <= 0 || prefVal <= 0) {
+                tooltip.innerText = 'Enter values to see estimated sizes.';
+                return;
+            }
+
+            // Size in GB for a 60-minute file: (MB/min * 60) / 1024
+            const minGB = ((minVal * 60) / 1024).toFixed(2);
+            const maxGB = ((maxVal * 60) / 1024).toFixed(2);
+            const prefGB = ((prefVal * 60) / 1024).toFixed(2);
+
+            tooltip.innerHTML = `Estimated sizes for 1 hour: <b>${minGB} GB - ${maxGB} GB</b> (Preferred: <b>${prefGB} GB</b>)`;
+        }
+
+        async function updateQuality(apiKey) {
+            const minInput = document.getElementById('quality-min-' + apiKey);
+            const maxInput = document.getElementById('quality-max-' + apiKey);
+            const prefInput = document.getElementById('quality-pref-' + apiKey);
+
+            const minVal = parseFloat(minInput.value);
+            const maxVal = parseFloat(maxInput.value);
+            const prefVal = parseFloat(prefInput.value);
+
+            if (isNaN(minVal) || isNaN(maxVal) || isNaN(prefVal) || minVal <= 0 || maxVal <= 0 || prefVal <= 0) {
+                showToast('Error', 'Please enter valid numbers greater than 0 for MB/min fields.', true);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/quality', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        apps_to_update: [
+                            {
+                                api_key: apiKey,
+                                min_mb_per_min: minVal,
+                                max_mb_per_min: maxVal,
+                                preferred_mb_per_min: prefVal
+                            }
+                        ]
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok || data.status === 'error') {
+                    throw new Error(data.errors?.[0]?.message || data.detail || 'Failed to update quality definitions.');
+                }
+                if (data.status === 'partial_success') {
+                    showToast('Partial Success', 'Quality updated with some errors.', true);
+                } else {
+                    showToast('Success', 'Quality definitions updated successfully.');
+                }
+            } catch (err) {
+                showToast('Error', err.message, true);
+            }
+        }
+
         function handleHostnameChange(apiKey, value) {
             if (apiKey) {
                 appHostnames[apiKey] = value;
@@ -492,6 +559,35 @@
                 `;
             }
 
+            let qualityAction = '';
+            if (['sonarr', 'radarr'].includes(appData.app.toLowerCase())) {
+                qualityAction = `
+                    <div class="mt-4 pt-4 border-t border-gray-700">
+                        <label class="block text-xs font-medium text-gray-400 mb-2">Quality Definition (MB/min)</label>
+                        <div class="flex flex-col space-y-2 mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-400 w-16">Min</span>
+                                <input type="number" id="quality-min-${appData.apiKey}" onclick="event.stopPropagation()" class="flex-1 bg-gray-900 text-white px-2 py-1 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="e.g. 10" min="0" step="0.1" oninput="updateQualityTooltip('${appData.apiKey}')">
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-400 w-16">Preferred</span>
+                                <input type="number" id="quality-pref-${appData.apiKey}" onclick="event.stopPropagation()" class="flex-1 bg-gray-900 text-white px-2 py-1 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="e.g. 100" min="0" step="0.1" oninput="updateQualityTooltip('${appData.apiKey}')">
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-400 w-16">Max</span>
+                                <input type="number" id="quality-max-${appData.apiKey}" onclick="event.stopPropagation()" class="flex-1 bg-gray-900 text-white px-2 py-1 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="e.g. 400" min="0" step="0.1" oninput="updateQualityTooltip('${appData.apiKey}')">
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-3">
+                            <p class="text-xs text-gray-500 flex-1" id="quality-tooltip-${appData.apiKey}">Enter values to see estimated sizes.</p>
+                            <button onclick="event.stopPropagation(); updateQuality('${appData.apiKey}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition text-sm flex-shrink-0">
+                                Set Quality
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
             let setupAction = '';
             if (isSetupSupported && !isSetupComplete) {
                 setupAction = `
@@ -543,6 +639,7 @@
                                 </div>
                             </div>
                         </div>
+                        ${qualityAction}
                         ${setupAction}
                         ${linkButton}
                     </div>

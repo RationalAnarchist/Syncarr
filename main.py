@@ -10,7 +10,7 @@ import json
 from utils.scanner import scan_configs
 from utils.backup import create_backup
 from services.prowlarr import add_app_to_prowlarr
-from services.servarr_clients import add_download_client, build_qbittorrent_payload, build_nzbget_payload
+from services.servarr_clients import add_download_client, build_qbittorrent_payload, build_nzbget_payload, update_quality_definitions
 from services.overseerr import add_radarr_to_overseerr, add_sonarr_to_overseerr, sync_overseerr_profiles
 import httpx
 from pydantic import BaseModel
@@ -28,6 +28,15 @@ class ClientConfig(BaseModel):
 class LinkDownloadersRequest(BaseModel):
     qbittorrent: Optional[ClientConfig] = None
     nzbget: Optional[ClientConfig] = None
+
+class AppQualityRequest(BaseModel):
+    api_key: str
+    min_mb_per_min: float
+    max_mb_per_min: float
+    preferred_mb_per_min: float
+
+class UpdateQualityRequest(BaseModel):
+    apps_to_update: list[AppQualityRequest] = []
 
 class AppLinkInfo(BaseModel):
     api_key: str
@@ -423,6 +432,59 @@ async def link_prowlarr():
             except Exception as e:
                 logger.error(f"Error: {str(e)}")
                 errors.append({"app": app_name, "status": "error", "message": str(e)})
+
+    return JSONResponse(content={
+        "status": "success" if not errors else "partial_success" if results else "error",
+        "results": results,
+        "errors": errors
+    })
+
+@app.post("/api/quality")
+async def update_quality(request: UpdateQualityRequest):
+    """
+    Endpoint to update quality definitions for Sonarr and Radarr.
+    """
+    discovered_apps = scan_configs(get_configs_dir())
+
+    results = []
+    errors = []
+
+    for app_to_update in request.apps_to_update:
+        app_config = next((app for app in discovered_apps if app.get('apiKey') == app_to_update.api_key), None)
+        if not app_config:
+            errors.append({"api_key": app_to_update.api_key, "status": "error", "message": "App not found"})
+            continue
+
+        app_name = app_config['app'].lower()
+        if app_name not in ['sonarr', 'radarr']:
+            errors.append({"app": app_name, "status": "error", "message": "Only Sonarr and Radarr are supported"})
+            continue
+
+        app_ip = app_config.get('hostname', 'localhost')
+        app_port = app_config['port']
+        app_api_key = app_config['apiKey']
+        app_url_base = app_config.get('urlBase', '')
+
+        # Use full URL if URL base exists
+        app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+
+        logger.debug(f"Attempting to update quality definitions for {app_name} at {app_url}")
+        try:
+            result = await update_quality_definitions(
+                app_url=app_url,
+                app_api_key=app_api_key,
+                min_mb_per_min=app_to_update.min_mb_per_min,
+                max_mb_per_min=app_to_update.max_mb_per_min,
+                preferred_mb_per_min=app_to_update.preferred_mb_per_min
+            )
+            logger.info(f"Successfully updated quality definitions for {app_name}")
+            results.append({"app": app_name, "status": "success", "result": result})
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
+            errors.append({"app": app_name, "status": "error", "message": f"HTTP Error: {e.response.status_code} - {e.response.text}"})
+        except Exception as e:
+            logger.error(f"Error: {str(e)}")
+            errors.append({"app": app_name, "status": "error", "message": str(e)})
 
     return JSONResponse(content={
         "status": "success" if not errors else "partial_success" if results else "error",
