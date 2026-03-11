@@ -57,6 +57,12 @@ class LinkOverseerrRequest(BaseModel):
     port: int = 5055
     apps_to_link: list[AppLinkInfo] = []
 
+class LinkProwlarrRequest(BaseModel):
+    api_key: str
+    host: str = "localhost"
+    port: int = 9696
+    apps_to_link: list[AppLinkInfo] = []
+
 class UpdateSettingsRequest(BaseModel):
     config_dir: str
     log_level: str = "INFO"
@@ -304,7 +310,7 @@ async def setup_app(request: SetupAppRequest):
 
     # Restart the app
     api_version = "v3"
-    if app_config['app'].lower() in ['lidarr', 'readarr']:
+    if app_config['app'].lower() in ['lidarr', 'readarr', 'prowlarr']:
         api_version = "v1"
     restart_url = f"{app_url}/api/{api_version}/system/restart"
     async with httpx.AsyncClient() as client:
@@ -326,34 +332,80 @@ async def discover_apps():
 
     for app in discovered_apps:
         app_name = app['app'].lower()
-        if app_name in ['sonarr', 'radarr', 'lidarr', 'readarr']:
-            app_ip = app.get('hostname', 'localhost')
-            app_port = app['port']
-            app_api_key = app['apiKey']
-            app_url_base = app.get('urlBase', '')
-            app_url = f"http://{app_ip}:{app_port}{app_url_base}"
-            headers = {"X-Api-Key": app_api_key}
-
-            has_root_folders = False
-
-            api_version = "v3"
-            if app_name in ['lidarr', 'readarr']:
-                api_version = "v1"
-
-            try:
-                async with httpx.AsyncClient(timeout=3.0) as client:
-                    response = await client.get(f"{app_url}/api/{api_version}/rootfolder", headers=headers)
-                    if response.status_code == 200:
-                        folders = response.json()
-                        if folders and len(folders) > 0:
-                            has_root_folders = True
-            except Exception as e:
-                logger.debug(f"Failed to connect to {app_name} at {app_url} to check root folders: {e}")
-
+        if app_name in ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr']:
             auth_method = app.get('authMethod', 'None')
             is_auth_configured = auth_method != 'None' and auth_method != ''
 
-            app['isSetupComplete'] = is_auth_configured and has_root_folders
+            if app_name == 'prowlarr':
+                app['isSetupComplete'] = is_auth_configured
+
+                # Fetch linked applications from Prowlarr API
+                app_ip = app.get('hostname', 'localhost')
+                app_port = app['port']
+                app_api_key = app['apiKey']
+                app_url_base = app.get('urlBase', '')
+                app_url = f"http://{app_ip}:{app_port}{app_url_base}".rstrip('/')
+
+                app['linkedApiKeys'] = []
+                try:
+                    async with httpx.AsyncClient(timeout=3.0) as client:
+                        response = await client.get(f"{app_url}/api/v1/applications", headers={"X-Api-Key": app_api_key})
+                        if response.status_code == 200:
+                            prowlarr_apps = response.json()
+                            linked_keys = []
+                            for p_app in prowlarr_apps:
+                                # Extract both apiKey and baseUrl. apiKey is often redacted or omitted.
+                                p_api_key = None
+                                p_base_url = None
+                                for field in p_app.get('fields', []):
+                                    if field.get('name') == 'apiKey' and field.get('value'):
+                                        p_api_key = field.get('value')
+                                    if field.get('name') == 'baseUrl' and field.get('value'):
+                                        p_base_url = field.get('value')
+
+                                # If we have a valid API key that doesn't look like a masked password
+                                if p_api_key and not p_api_key.startswith('<'):
+                                    linked_keys.append(p_api_key)
+                                elif p_base_url:
+                                    # Fallback: find the app in discovered_apps that matches this baseUrl
+                                    for disc_app in discovered_apps:
+                                        d_ip = disc_app.get('hostname', 'localhost')
+                                        d_port = disc_app['port']
+                                        d_url_base = disc_app.get('urlBase', '')
+                                        d_url = f"http://{d_ip}:{d_port}{d_url_base}".rstrip('/')
+                                        if d_url == p_base_url.rstrip('/') or disc_app['app'].lower() == p_app.get('name', '').lower():
+                                            linked_keys.append(disc_app['apiKey'])
+                                            break
+
+                            app['linkedApiKeys'] = linked_keys
+                except Exception as e:
+                    logger.debug(f"Failed to fetch linked applications from Prowlarr at {app_url}: {e}")
+
+            else:
+                app_ip = app.get('hostname', 'localhost')
+                app_port = app['port']
+                app_api_key = app['apiKey']
+                app_url_base = app.get('urlBase', '')
+                app_url = f"http://{app_ip}:{app_port}{app_url_base}".rstrip('/')
+                headers = {"X-Api-Key": app_api_key}
+
+                has_root_folders = False
+
+                api_version = "v3"
+                if app_name in ['lidarr', 'readarr']:
+                    api_version = "v1"
+
+                try:
+                    async with httpx.AsyncClient(timeout=3.0) as client:
+                        response = await client.get(f"{app_url}/api/{api_version}/rootfolder", headers=headers)
+                        if response.status_code == 200:
+                            folders = response.json()
+                            if folders and len(folders) > 0:
+                                has_root_folders = True
+                except Exception as e:
+                    logger.debug(f"Failed to connect to {app_name} at {app_url} to check root folders: {e}")
+
+                app['isSetupComplete'] = is_auth_configured and has_root_folders
 
     return JSONResponse(content={"status": "success", "data": discovered_apps})
 
@@ -381,7 +433,7 @@ def backup_apps():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/link/prowlarr")
-async def link_prowlarr():
+async def link_prowlarr(request: LinkProwlarrRequest):
     """
     Endpoint to automatically connect Sonarr, Radarr, Lidarr, and Readarr to Prowlarr.
     """
@@ -392,33 +444,44 @@ async def link_prowlarr():
     if not prowlarr_config:
         raise HTTPException(status_code=400, detail="Prowlarr configuration not found.")
 
-    prowlarr_ip = prowlarr_config.get('hostname', 'localhost')
-    prowlarr_url = f"http://{prowlarr_ip}:{prowlarr_config.get('port', '9696')}{prowlarr_config.get('urlBase', '')}"
-    prowlarr_api_key = prowlarr_config.get('apiKey')
+    prowlarr_url_base = prowlarr_config.get('urlBase', '')
+    # Ensure no trailing slashes on URLs to prevent 404s when appending /api paths
+    prowlarr_url = f"http://{request.host}:{request.port}{prowlarr_url_base}".rstrip('/')
 
-    if not prowlarr_api_key:
-        raise HTTPException(status_code=400, detail="Prowlarr API Key not found.")
+    # Save the provided hostnames to settings.json so future discoveries use the correct IP
+    settings = load_settings()
+    if "app_hostnames" not in settings:
+        settings["app_hostnames"] = {}
+    settings["app_hostnames"][request.api_key] = request.host
+    for app_link_info in request.apps_to_link:
+        settings["app_hostnames"][app_link_info.api_key] = app_link_info.hostname
+    save_settings_dict(settings)
 
     results = []
     errors = []
 
     for app in discovered_apps:
         app_name = app['app']
-        if app_name.lower() in ['sonarr', 'radarr', 'lidarr', 'readarr']:
-            logger.debug(f"Attempting to link {app_name} to Prowlarr at {prowlarr_url}")
-            app_ip = app.get('hostname', 'localhost')
+
+        # Check if this app is in the request's apps_to_link
+        app_api_key = app.get('apiKey')
+        app_link_info = next((item for item in request.apps_to_link if item.api_key == app_api_key), None)
+
+        if app_name.lower() in ['sonarr', 'radarr', 'lidarr', 'readarr'] and app_link_info:
+            logger.debug(f"Attempting to link {app_name} to Prowlarr at {prowlarr_url} with app host {app_link_info.hostname}")
+            app_ip = app_link_info.hostname
             app_port = app['port']
             app_api_key = app['apiKey']
             app_url_base = app.get('urlBase', '')
 
             # Use full URL if URL base exists
-            app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+            app_url = f"http://{app_ip}:{app_port}{app_url_base}".rstrip('/')
 
             try:
                 logger.debug(f"Sending request to Prowlarr at {prowlarr_url} to add {app_name} at {app_url}")
                 result = await add_app_to_prowlarr(
                     prowlarr_url=prowlarr_url,
-                    prowlarr_api_key=prowlarr_api_key,
+                    prowlarr_api_key=request.api_key,
                     app_name=app_name,
                     app_url=app_url,
                     app_api_key=app_api_key,
@@ -503,6 +566,15 @@ async def link_overseerr(request: LinkOverseerrRequest):
     errors = []
 
     overseerr_url = f"http://{request.host}:{request.port}"
+
+    # Save the provided hostnames to settings.json so future discoveries use the correct IP
+    settings = load_settings()
+    if "app_hostnames" not in settings:
+        settings["app_hostnames"] = {}
+    settings["app_hostnames"][request.api_key] = request.host
+    for app_link_info in request.apps_to_link:
+        settings["app_hostnames"][app_link_info.api_key] = app_link_info.hostname
+    save_settings_dict(settings)
 
     for app in discovered_apps:
         app_name = app['app'].lower()

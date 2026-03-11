@@ -18,7 +18,18 @@ def test_link_prowlarr():
     with mock.patch('main.scan_configs', return_value=mock_configs):
         with mock.patch('main.add_app_to_prowlarr', new_callable=mock.AsyncMock) as mock_add_app:
             mock_add_app.return_value = {"id": 1, "name": "Sonarr"}
-            response = client.post("/api/link/prowlarr")
+            payload = {
+                "api_key": "test_prowlarr_key",
+                "host": "localhost",
+                "port": 9696,
+                "apps_to_link": [
+                    {
+                        "api_key": "test_sonarr_key",
+                        "hostname": "localhost"
+                    }
+                ]
+            }
+            response = client.post("/api/link/prowlarr", json=payload)
         print(response.json())
         assert response.status_code == 200
 
