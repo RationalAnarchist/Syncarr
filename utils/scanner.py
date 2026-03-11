@@ -126,12 +126,20 @@ def parse_settings_json(filepath):
 
 def identify_app(filepath, config_data, settings_data=None):
     """
-    Guesses the app based on the directory name.
+    Guesses the app based on the file name and directory name.
     Falls back to unknown if not in the KNOWN_APPS list.
     """
     if settings_data and 'app_types' in settings_data:
         if filepath in settings_data['app_types']:
             return settings_data['app_types'][filepath].capitalize()
+
+    filename = os.path.basename(filepath).lower()
+    if filename == 'nzbget.conf':
+        return 'Nzbget'
+    elif filename == 'qbittorrent.conf':
+        return 'Qbittorrent'
+    elif filename == 'settings.json':
+        return 'Overseerr'
 
     parent_dir = os.path.basename(os.path.dirname(filepath)).lower()
 
@@ -176,10 +184,11 @@ def scan_configs(base_dir):
                 if config_data:
                     app_name = identify_app(filepath, config_data, settings_data)
                     api_key = config_data.get("ApiKey")
+                    hostname = app_hostnames.get(api_key) if api_key else app_hostnames.get(filepath)
                     discovered_apps.append({
                         "app": app_name,
                         "path": filepath,
-                        "hostname": app_hostnames.get(api_key, "localhost"),
+                        "hostname": hostname or "localhost",
                         "apiKey": api_key,
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),
@@ -193,10 +202,11 @@ def scan_configs(base_dir):
                 if config_data:
                     app_name = identify_app(filepath, config_data, settings_data)
                     api_key = config_data.get("ApiKey")
+                    hostname = app_hostnames.get(api_key) if api_key else app_hostnames.get(filepath)
                     discovered_apps.append({
                         "app": app_name,
                         "path": filepath,
-                        "hostname": app_hostnames.get(api_key, "localhost"),
+                        "hostname": hostname or "localhost",
                         "apiKey": api_key,
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),
@@ -212,10 +222,11 @@ def scan_configs(base_dir):
                 if config_data:
                     app_name = identify_app(filepath, config_data, settings_data)
                     api_key = config_data.get("ApiKey")
+                    hostname = app_hostnames.get(api_key) if api_key else app_hostnames.get(filepath)
                     discovered_apps.append({
                         "app": app_name,
                         "path": filepath,
-                        "hostname": app_hostnames.get(api_key, "localhost"),
+                        "hostname": hostname or "localhost",
                         "apiKey": api_key,
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),
@@ -231,10 +242,11 @@ def scan_configs(base_dir):
                 if config_data:
                     app_name = identify_app(filepath, config_data, settings_data)
                     api_key = config_data.get("ApiKey")
+                    hostname = app_hostnames.get(api_key) if api_key else app_hostnames.get(filepath)
                     discovered_apps.append({
                         "app": app_name,
                         "path": filepath,
-                        "hostname": app_hostnames.get(api_key, "localhost"),
+                        "hostname": hostname or "localhost",
                         "apiKey": api_key,
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),

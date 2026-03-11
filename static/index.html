@@ -475,27 +475,27 @@
         let allDiscoveredApps = [];
         let appHostnames = {};
 
-        function toggleCardCollapse(apiKey) {
-            const bodyEl = document.getElementById(`card-body-${apiKey}`);
-            const iconEl = document.getElementById(`collapse-icon-${apiKey}`);
+        function toggleCardCollapse(appId) {
+            const bodyEl = document.getElementById(`card-body-${appId}`);
+            const iconEl = document.getElementById(`collapse-icon-${appId}`);
 
-            if (collapsedCards.has(apiKey)) {
-                collapsedCards.delete(apiKey);
+            if (collapsedCards.has(appId)) {
+                collapsedCards.delete(appId);
                 if (bodyEl) bodyEl.classList.remove('hidden');
                 if (iconEl) iconEl.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>';
             } else {
-                collapsedCards.add(apiKey);
+                collapsedCards.add(appId);
                 if (bodyEl) bodyEl.classList.add('hidden');
                 if (iconEl) iconEl.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>';
             }
         }
 
-        async function saveHostname(apiKey, hostname) {
+        async function saveHostname(appId, apiKey, path, hostname) {
             try {
                 const response = await fetch('/api/app/hostname', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ api_key: apiKey, hostname: hostname })
+                    body: JSON.stringify({ api_key: apiKey || '', path: path, hostname: hostname })
                 });
                 if (!response.ok) throw new Error('Failed to save hostname');
             } catch (err) {
@@ -585,10 +585,10 @@
             }
         }
 
-        function handleHostnameChange(apiKey, value) {
-            if (apiKey) {
-                appHostnames[apiKey] = value;
-                saveHostname(apiKey, value);
+        function handleHostnameChange(appId, apiKey, path, value) {
+            if (appId) {
+                appHostnames[appId] = value;
+                saveHostname(appId, apiKey, path, value);
             }
         }
 
@@ -622,12 +622,12 @@
 
             let updateCount = 0;
             allDiscoveredApps.forEach(app => {
-                const apiKey = app.apiKey;
-                if (apiKey) {
-                    const el = document.getElementById('hostname-' + apiKey);
+                const appId = app.apiKey || btoa(encodeURIComponent(app.path)).replace(/[^a-zA-Z0-9]/g, '');
+                if (appId) {
+                    const el = document.getElementById('hostname-' + appId);
                     if (el && el.value !== inputVal) {
                         el.value = inputVal;
-                        handleHostnameChange(apiKey, inputVal);
+                        handleHostnameChange(appId, app.apiKey, app.path, inputVal);
                         updateCount++;
                     }
                 }
@@ -641,13 +641,14 @@
         }
 
         const renderCard = (appData) => {
+            const appId = appData.apiKey || btoa(encodeURIComponent(appData.path)).replace(/[^a-zA-Z0-9]/g, '');
             const accentColor = getAppColor(appData.app);
             const urlBaseDisplay = appData.urlBase ? appData.urlBase : '/';
 
             const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
             const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr'].includes(appData.app.toLowerCase());
             const isSelected = selectedApps.has(appData.apiKey);
-            const isCollapsed = collapsedCards.has(appData.apiKey);
+            const isCollapsed = collapsedCards.has(appId);
 
             let cardClasses = `bg-servarrCard rounded-lg shadow-lg border border-servarrBorder overflow-hidden flex flex-col transition hover:border-gray-600`;
             if (isSelectable && isSelected) {
@@ -804,17 +805,17 @@
                             ${linkedBadge}
                             <div class="ml-auto flex items-center space-x-2">
                                 <span class="px-2.5 py-1 bg-gray-800 text-xs font-medium rounded text-gray-300 border border-gray-700">Port ${appData.port}</span>
-                                <button onclick="event.stopPropagation(); toggleCardCollapse('${appData.apiKey}')" class="text-gray-400 hover:text-white transition p-1">
-                                    <svg id="collapse-icon-${appData.apiKey}" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">${collapseIcon}</svg>
+                                <button onclick="event.stopPropagation(); toggleCardCollapse('${appId}')" class="text-gray-400 hover:text-white transition p-1">
+                                    <svg id="collapse-icon-${appId}" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">${collapseIcon}</svg>
                                 </button>
                             </div>
                         </div>
 
-                        <div id="card-body-${appData.apiKey}" class="${isCollapsed ? 'hidden' : ''} flex-1 flex flex-col">
+                        <div id="card-body-${appId}" class="${isCollapsed ? 'hidden' : ''} flex-1 flex flex-col">
                             <div class="space-y-3 flex-1">
                                 <div>
                                     <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider flex items-center">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="ml-1 cursor-help text-gray-400 hover:text-white">ⓘ</span></label>
-                                    <input type="text" id="hostname-${appData.apiKey}" onchange="handleHostnameChange('${appData.apiKey}', this.value)" onclick="event.stopPropagation()" value="${appData.hostname || appHostnames[appData.apiKey] || 'localhost'}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
+                                    <input type="text" id="hostname-${appId}" onchange="handleHostnameChange('${appId}', '${appData.apiKey || ""}', '${appData.path.replace(/\\/g, '\\\\')}', this.value)" onclick="event.stopPropagation()" value="${appData.hostname || appHostnames[appId] || 'localhost'}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
                                 </div>
                                 <div>
                                     <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">API Key</label>
@@ -873,7 +874,7 @@
             selectedApps.clear();
 
             try {
-                const settingsRes = await fetch('/api/settings');
+                const settingsRes = await fetch('/api/settings', { cache: 'no-store' });
                 const settingsData = await settingsRes.json();
 
                 if (settingsData.status === 'success' && !settingsData.data.config_dir) {
@@ -887,7 +888,7 @@
                     return;
                 }
 
-                const response = await fetch('/api/discover');
+                const response = await fetch('/api/discover', { cache: 'no-store' });
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -913,7 +914,7 @@
         }
         async function fetchSettings() {
             try {
-                const response = await fetch('/api/settings');
+                const response = await fetch('/api/settings', { cache: 'no-store' });
                 const data = await response.json();
 
                 if (data.status === 'success') {

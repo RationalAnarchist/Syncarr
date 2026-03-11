@@ -31,6 +31,7 @@ class LinkDownloadersRequest(BaseModel):
 
 class AppQualityRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     min_mb_per_min: float
     max_mb_per_min: float
     preferred_mb_per_min: float
@@ -40,10 +41,12 @@ class UpdateQualityRequest(BaseModel):
 
 class AppLinkInfo(BaseModel):
     api_key: str
+    path: Optional[str] = None
     hostname: str = "localhost"
 
 class SetupAppRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     host: str = "localhost"
     auth_method: Optional[str] = None
     auth_required: Optional[str] = None
@@ -53,12 +56,14 @@ class SetupAppRequest(BaseModel):
 
 class LinkOverseerrRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     host: str = "localhost"
     port: int = 5055
     apps_to_link: list[AppLinkInfo] = []
 
 class LinkProwlarrRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     host: str = "localhost"
     port: int = 9696
     apps_to_link: list[AppLinkInfo] = []
@@ -73,6 +78,7 @@ class AppTypeOverrideRequest(BaseModel):
 
 class AppHostnameOverrideRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     hostname: str
 
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
@@ -212,7 +218,10 @@ def update_app_hostname(request: AppHostnameOverrideRequest):
     if "app_hostnames" not in settings:
         settings["app_hostnames"] = {}
 
-    settings["app_hostnames"][request.api_key] = request.hostname
+    if request.api_key:
+        settings["app_hostnames"][request.api_key] = request.hostname
+    elif request.path:
+        settings["app_hostnames"][request.path] = request.hostname
 
     if not save_settings_dict(settings):
         raise HTTPException(status_code=500, detail="Failed to save app hostname")
