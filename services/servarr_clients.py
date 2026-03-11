@@ -93,28 +93,27 @@ async def update_quality_definitions(app_url: str, app_api_key: str, min_mb_per_
         updated_definitions = []
         # Update all definitions
         for df in definitions:
-            # We must inspect to identify the correct size-related keys
-            if "minSize" in df:
-                df["minSize"] = min_mb_per_min
-            elif "min" in df:
-                df["min"] = min_mb_per_min
+            # We unconditionally set the standard size-related keys to handle missing/null cases
+            df["minSize"] = min_mb_per_min
+            df["maxSize"] = max_mb_per_min
+            df["preferredSize"] = preferred_mb_per_min
 
-            if "maxSize" in df:
-                df["maxSize"] = max_mb_per_min
-            elif "max" in df:
-                df["max"] = max_mb_per_min
-
-            if "preferredSize" in df:
-                df["preferredSize"] = preferred_mb_per_min
-            elif "preferred" in df:
-                df["preferred"] = preferred_mb_per_min
+            # Also set the alternative keys just in case older versions use them
+            df["min"] = min_mb_per_min
+            df["max"] = max_mb_per_min
+            df["preferred"] = preferred_mb_per_min
 
             def_id = df.get('id')
             if def_id:
                 # Update individually per the confirmed PUT /api/v3/qualitydefinition/{id}
                 update_url = f"{app_url}/api/v3/qualitydefinition/{def_id}"
-                update_response = await client.put(update_url, headers=headers, json=df)
-                update_response.raise_for_status()
-                updated_definitions.append(update_response.json())
+                try:
+                    update_response = await client.put(update_url, headers=headers, json=df)
+                    update_response.raise_for_status()
+                    updated_definitions.append(update_response.json())
+                except httpx.HTTPStatusError as e:
+                    logger.warning(f"Failed to update quality definition {def_id} at {update_url}: {e.response.status_code} - {e.response.text}")
+                except Exception as e:
+                    logger.warning(f"Error updating quality definition {def_id}: {str(e)}")
 
         return updated_definitions
