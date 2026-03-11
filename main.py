@@ -57,6 +57,12 @@ class LinkOverseerrRequest(BaseModel):
     port: int = 5055
     apps_to_link: list[AppLinkInfo] = []
 
+class LinkProwlarrRequest(BaseModel):
+    api_key: str
+    host: str = "localhost"
+    port: int = 9696
+    apps_to_link: list[AppLinkInfo] = []
+
 class UpdateSettingsRequest(BaseModel):
     config_dir: str
     log_level: str = "INFO"
@@ -381,7 +387,7 @@ def backup_apps():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/link/prowlarr")
-async def link_prowlarr():
+async def link_prowlarr(request: LinkProwlarrRequest):
     """
     Endpoint to automatically connect Sonarr, Radarr, Lidarr, and Readarr to Prowlarr.
     """
@@ -392,21 +398,22 @@ async def link_prowlarr():
     if not prowlarr_config:
         raise HTTPException(status_code=400, detail="Prowlarr configuration not found.")
 
-    prowlarr_ip = prowlarr_config.get('hostname', 'localhost')
-    prowlarr_url = f"http://{prowlarr_ip}:{prowlarr_config.get('port', '9696')}{prowlarr_config.get('urlBase', '')}"
-    prowlarr_api_key = prowlarr_config.get('apiKey')
-
-    if not prowlarr_api_key:
-        raise HTTPException(status_code=400, detail="Prowlarr API Key not found.")
+    prowlarr_url_base = prowlarr_config.get('urlBase', '')
+    prowlarr_url = f"http://{request.host}:{request.port}{prowlarr_url_base}"
 
     results = []
     errors = []
 
     for app in discovered_apps:
         app_name = app['app']
-        if app_name.lower() in ['sonarr', 'radarr', 'lidarr', 'readarr']:
-            logger.debug(f"Attempting to link {app_name} to Prowlarr at {prowlarr_url}")
-            app_ip = app.get('hostname', 'localhost')
+
+        # Check if this app is in the request's apps_to_link
+        app_api_key = app.get('apiKey')
+        app_link_info = next((item for item in request.apps_to_link if item.api_key == app_api_key), None)
+
+        if app_name.lower() in ['sonarr', 'radarr', 'lidarr', 'readarr'] and app_link_info:
+            logger.debug(f"Attempting to link {app_name} to Prowlarr at {prowlarr_url} with app host {app_link_info.hostname}")
+            app_ip = app_link_info.hostname
             app_port = app['port']
             app_api_key = app['apiKey']
             app_url_base = app.get('urlBase', '')
@@ -418,7 +425,7 @@ async def link_prowlarr():
                 logger.debug(f"Sending request to Prowlarr at {prowlarr_url} to add {app_name} at {app_url}")
                 result = await add_app_to_prowlarr(
                     prowlarr_url=prowlarr_url,
-                    prowlarr_api_key=prowlarr_api_key,
+                    prowlarr_api_key=request.api_key,
                     app_name=app_name,
                     app_url=app_url,
                     app_api_key=app_api_key,

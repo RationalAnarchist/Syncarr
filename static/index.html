@@ -242,6 +242,74 @@
             }, 3000);
         }
 
+        async function linkProwlarr(apiKey) {
+            if (!apiKey) {
+                showToast('Error', 'Prowlarr API Key missing.', true);
+                return;
+            }
+
+            if (selectedApps.size === 0) {
+                showToast('Info', 'Please select at least one instance to link.', false);
+                return;
+            }
+
+            const appsToLink = Array.from(selectedApps).map(key => {
+                const hostnameInput = document.getElementById('hostname-' + key);
+                return {
+                    api_key: key,
+                    hostname: hostnameInput ? hostnameInput.value.trim() || 'localhost' : 'localhost'
+                };
+            });
+
+            const btn = document.getElementById('linkProwlarrBtn');
+            const originalContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `
+                <svg class="animate-spin h-4 w-4 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Linking...
+            `;
+
+            try {
+                const prowlarrApp = allDiscoveredApps.find(a => a.app.toLowerCase() === 'prowlarr');
+                let prowlarrHost = 'localhost';
+                if (prowlarrApp) {
+                    prowlarrHost = appHostnames[prowlarrApp.apiKey] || prowlarrApp.hostname || 'localhost';
+                }
+                const prowlarrPortInput = document.getElementById('port-prowlarr');
+                const prowlarrPort = prowlarrPortInput ? parseInt(prowlarrPortInput.value) || 9696 : 9696;
+
+                const response = await fetch('/api/link/prowlarr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: apiKey, host: prowlarrHost, port: prowlarrPort, apps_to_link: appsToLink })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to link Prowlarr.');
+                }
+
+                if (data.status === 'success') {
+                    showToast('Linked Successfully', 'Prowlarr has been linked with selected apps.');
+                    discoverApps(); // rescan to get updated linked keys
+                } else if (data.status === 'partial_success') {
+                    showToast('Partial Success', 'Linked some apps, but others failed.', true);
+                    discoverApps();
+                } else {
+                    showToast('Link Failed', 'Failed to link any apps to Prowlarr.', true);
+                }
+            } catch (err) {
+                showToast('Error', err.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+            }
+        }
+
         async function linkOverseerr(apiKey) {
             if (!apiKey) {
                 showToast('Error', 'Overseerr API Key missing.', true);
@@ -485,7 +553,7 @@
             const accentColor = getAppColor(appData.app);
             const urlBaseDisplay = appData.urlBase ? appData.urlBase : '/';
 
-            const isSelectable = ['sonarr', 'radarr'].includes(appData.app.toLowerCase());
+            const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
             const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
             const isSelected = selectedApps.has(appData.apiKey);
 
@@ -520,7 +588,23 @@
             }
 
             let linkButton = '';
-            if (appData.app.toLowerCase() === 'overseerr') {
+            if (appData.app.toLowerCase() === 'prowlarr') {
+                const prowlarrPort = appData.port || 9696;
+                linkButton = `
+                    <div class="mt-4 pt-4 border-t border-gray-700">
+                        <div class="flex space-x-2 mb-3 pt-2">
+                            <div class="w-full">
+                                <label for="port-prowlarr" class="block text-xs font-medium text-gray-400 mb-1">Port</label>
+                                <input type="number" id="port-prowlarr" value="${prowlarrPort}" class="w-full bg-gray-900 text-white px-3 py-1.5 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm">
+                            </div>
+                        </div>
+                        <button onclick="linkProwlarr('${appData.apiKey}')" id="linkProwlarrBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            Link Selected Instances
+                        </button>
+                    </div>
+                `;
+            } else if (appData.app.toLowerCase() === 'overseerr') {
                 const overseerrPort = appData.port || 5055;
                 linkButton = `
                     <div class="mt-4 pt-4 border-t border-gray-700">
