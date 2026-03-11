@@ -13,6 +13,9 @@ async def get_sync_profile_id(prowlarr_url: str, prowlarr_api_key: str) -> int:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"Sync profile endpoint not found at {url}. Defaulting to ID 1.")
+                return 1
             logger.error(f"Failed to fetch Sync Profile ID. Status: {e.response.status_code}, URL: {url}, Response: {e.response.text}")
             raise
         profiles = response.json()

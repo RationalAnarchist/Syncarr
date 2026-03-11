@@ -276,7 +276,8 @@
                 const prowlarrApp = allDiscoveredApps.find(a => a.app.toLowerCase() === 'prowlarr');
                 let prowlarrHost = 'localhost';
                 if (prowlarrApp) {
-                    prowlarrHost = appHostnames[prowlarrApp.apiKey] || prowlarrApp.hostname || 'localhost';
+                    const hostnameInput = document.getElementById('hostname-' + prowlarrApp.apiKey);
+                    prowlarrHost = (hostnameInput && hostnameInput.value.trim()) ? hostnameInput.value.trim() : (prowlarrApp.hostname || 'localhost');
                 }
                 const prowlarrPortInput = document.getElementById('port-prowlarr');
                 const prowlarrPort = prowlarrPortInput ? parseInt(prowlarrPortInput.value) || 9696 : 9696;
@@ -344,7 +345,8 @@
                 const overseerrApp = allDiscoveredApps.find(a => a.app.toLowerCase() === 'overseerr');
                 let overseerrHost = 'localhost';
                 if (overseerrApp) {
-                    overseerrHost = appHostnames[overseerrApp.apiKey] || overseerrApp.hostname || 'localhost';
+                    const hostnameInput = document.getElementById('hostname-' + overseerrApp.apiKey);
+                    overseerrHost = (hostnameInput && hostnameInput.value.trim()) ? hostnameInput.value.trim() : (overseerrApp.hostname || 'localhost');
                 }
                 const overseerrPortInput = document.getElementById('port-overseerr');
                 const overseerrPort = overseerrPortInput ? parseInt(overseerrPortInput.value) || 5055 : 5055;
