@@ -448,6 +448,15 @@ async def link_prowlarr(request: LinkProwlarrRequest):
     # Ensure no trailing slashes on URLs to prevent 404s when appending /api paths
     prowlarr_url = f"http://{request.host}:{request.port}{prowlarr_url_base}".rstrip('/')
 
+    # Save the provided hostnames to settings.json so future discoveries use the correct IP
+    settings = load_settings()
+    if "app_hostnames" not in settings:
+        settings["app_hostnames"] = {}
+    settings["app_hostnames"][request.api_key] = request.host
+    for app_link_info in request.apps_to_link:
+        settings["app_hostnames"][app_link_info.api_key] = app_link_info.hostname
+    save_settings_dict(settings)
+
     results = []
     errors = []
 
@@ -557,6 +566,15 @@ async def link_overseerr(request: LinkOverseerrRequest):
     errors = []
 
     overseerr_url = f"http://{request.host}:{request.port}"
+
+    # Save the provided hostnames to settings.json so future discoveries use the correct IP
+    settings = load_settings()
+    if "app_hostnames" not in settings:
+        settings["app_hostnames"] = {}
+    settings["app_hostnames"][request.api_key] = request.host
+    for app_link_info in request.apps_to_link:
+        settings["app_hostnames"][app_link_info.api_key] = app_link_info.hostname
+    save_settings_dict(settings)
 
     for app in discovered_apps:
         app_name = app['app'].lower()
