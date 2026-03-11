@@ -10,7 +10,11 @@ async def get_sync_profile_id(prowlarr_url: str, prowlarr_api_key: str) -> int:
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Failed to fetch Sync Profile ID. Status: {e.response.status_code}, URL: {url}, Response: {e.response.text}")
+            raise
         profiles = response.json()
 
         # usually 1 is the default

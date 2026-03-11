@@ -402,7 +402,8 @@ async def link_prowlarr(request: LinkProwlarrRequest):
         raise HTTPException(status_code=400, detail="Prowlarr configuration not found.")
 
     prowlarr_url_base = prowlarr_config.get('urlBase', '')
-    prowlarr_url = f"http://{request.host}:{request.port}{prowlarr_url_base}"
+    # Ensure no trailing slashes on URLs to prevent 404s when appending /api paths
+    prowlarr_url = f"http://{request.host}:{request.port}{prowlarr_url_base}".rstrip('/')
 
     results = []
     errors = []
@@ -422,7 +423,7 @@ async def link_prowlarr(request: LinkProwlarrRequest):
             app_url_base = app.get('urlBase', '')
 
             # Use full URL if URL base exists
-            app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+            app_url = f"http://{app_ip}:{app_port}{app_url_base}".rstrip('/')
 
             try:
                 logger.debug(f"Sending request to Prowlarr at {prowlarr_url} to add {app_name} at {app_url}")
