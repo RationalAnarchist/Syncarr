@@ -141,7 +141,7 @@ def get_configs_dir():
             print(f"Error reading settings file: {e}")
 
     # Default fallback
-    return os.path.join(os.path.dirname(__file__), "test_configs")
+    return ""
 
 @app.get("/api/settings")
 def get_settings():
@@ -159,7 +159,7 @@ def get_settings():
     return JSONResponse(content={
         "status": "success",
         "data": {
-            "config_dir": settings.get("config_dir", os.path.join(os.path.dirname(__file__), "test_configs")),
+            "config_dir": settings.get("config_dir", ""),
             "env_override": os.environ.get("SYNCARR_CONFIG_DIR", None),
             "log_level": settings.get("log_level", "INFO")
         }
@@ -322,6 +322,38 @@ async def setup_app(request: SetupAppRequest):
             logger.error(f"Failed to connect to app to restart: {e}")
 
     return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
+
+@app.get("/api/browse")
+def browse_directory(path: str = "/"):
+    """
+    Endpoint to list directories in a given path for the interactive folder browser.
+    """
+    try:
+        if not os.path.exists(path) or not os.path.isdir(path):
+            raise HTTPException(status_code=400, detail="Invalid directory path.")
+
+        directories = []
+        for entry in os.scandir(path):
+            if entry.is_dir() and not entry.name.startswith('.'):
+                directories.append({
+                    "name": entry.name,
+                    "path": entry.path
+                })
+
+        # Sort directories alphabetically
+        directories.sort(key=lambda x: x["name"].lower())
+
+        return JSONResponse(content={
+            "status": "success",
+            "data": directories,
+            "current_path": os.path.abspath(path),
+            "parent_path": os.path.abspath(os.path.join(path, os.pardir))
+        })
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied to access this directory.")
+    except Exception as e:
+        logger.error(f"Error browsing directory {path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to browse directory: {str(e)}")
 
 @app.get("/api/discover")
 async def discover_apps():
