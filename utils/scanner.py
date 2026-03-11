@@ -5,17 +5,12 @@ import json
 KNOWN_APPS = ['sonarr', 'radarr', 'lidarr', 'prowlarr', 'overseerr', 'readarr', 'whisparr', 'nzbget', 'qbittorrent']
 
 def parse_config(filepath):
-    """
-    Parses a config.xml file to extract ApiKey, Port, and UrlBase.
-    Returns a dictionary with these values or None if parsing fails.
-    """
     try:
         tree = ET.parse(filepath)
         root = tree.getroot()
 
         config_data = {}
 
-        # Helper to extract text from a tag safely
         def get_tag_text(tag_name, default=""):
             elem = root.find(tag_name)
             return elem.text if elem is not None and elem.text else default
@@ -25,7 +20,6 @@ def parse_config(filepath):
         url_base = get_tag_text("UrlBase")
         auth_method = get_tag_text("AuthenticationMethod")
 
-        # Require at least Port to be useful. ApiKey is also generally required for *arr apps.
         if port:
             config_data["ApiKey"] = api_key
             config_data["Port"] = port
@@ -84,15 +78,15 @@ def parse_qbittorrent_config(filepath):
                     elif key == r"WebUI\Password_PBKDF2":
                         config_data["Password"] = val
 
-        if config_data.get("Port"):
-            config_data["ApiKey"] = ""
-            config_data["UrlBase"] = ""
-            return config_data
-        return None
+        if "Port" not in config_data:
+            config_data["Port"] = "8080"
+
+        config_data["ApiKey"] = ""
+        config_data["UrlBase"] = ""
+        return config_data
     except Exception as e:
         print(f"Error parsing {filepath}: {e}")
         return None
-
 
 def parse_settings_json(filepath):
     try:
@@ -125,10 +119,6 @@ def parse_settings_json(filepath):
         return None
 
 def identify_app(filepath, config_data, settings_data=None):
-    """
-    Guesses the app based on the file name and directory name.
-    Falls back to unknown if not in the KNOWN_APPS list.
-    """
     if settings_data and 'app_types' in settings_data:
         if filepath in settings_data['app_types']:
             return settings_data['app_types'][filepath].capitalize()
@@ -150,10 +140,6 @@ def identify_app(filepath, config_data, settings_data=None):
     return "Unknown"
 
 def scan_configs(base_dir):
-    """
-    Recursively scans base_dir for config.xml files.
-    Returns a list of dictionaries with app info.
-    """
     discovered_apps = []
 
     if not base_dir:
