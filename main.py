@@ -338,12 +338,35 @@ async def discover_apps():
 
             if app_name == 'prowlarr':
                 app['isSetupComplete'] = is_auth_configured
+
+                # Fetch linked applications from Prowlarr API
+                app_ip = app.get('hostname', 'localhost')
+                app_port = app['port']
+                app_api_key = app['apiKey']
+                app_url_base = app.get('urlBase', '')
+                app_url = f"http://{app_ip}:{app_port}{app_url_base}".rstrip('/')
+
+                app['linkedApiKeys'] = []
+                try:
+                    async with httpx.AsyncClient(timeout=3.0) as client:
+                        response = await client.get(f"{app_url}/api/v1/applications", headers={"X-Api-Key": app_api_key})
+                        if response.status_code == 200:
+                            prowlarr_apps = response.json()
+                            linked_keys = []
+                            for p_app in prowlarr_apps:
+                                for field in p_app.get('fields', []):
+                                    if field.get('name') == 'apiKey' and field.get('value'):
+                                        linked_keys.append(field['value'])
+                            app['linkedApiKeys'] = linked_keys
+                except Exception as e:
+                    logger.debug(f"Failed to fetch linked applications from Prowlarr at {app_url}: {e}")
+
             else:
                 app_ip = app.get('hostname', 'localhost')
                 app_port = app['port']
                 app_api_key = app['apiKey']
                 app_url_base = app.get('urlBase', '')
-                app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+                app_url = f"http://{app_ip}:{app_port}{app_url_base}".rstrip('/')
                 headers = {"X-Api-Key": app_api_key}
 
                 has_root_folders = False
