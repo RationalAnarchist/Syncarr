@@ -84,6 +84,17 @@
 
             <div id="error" class="hidden bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-md mb-6"></div>
 
+            <div id="globalHostnameBar" class="hidden mb-6 bg-servarrCard border border-servarrBorder rounded-lg shadow p-4 flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
+                <div class="flex-1">
+                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Apply Hostname to All</label>
+                    <input type="text" id="globalHostnameInput" class="w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan" placeholder="e.g. 192.168.1.100">
+                </div>
+                <button onclick="applyHostnameToAllApps()" class="md:mt-5 bg-servarrCyan hover:bg-[#2F855A] text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center shadow whitespace-nowrap">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Apply to All
+                </button>
+            </div>
+
             <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Cards will be injected here -->
             </div>
@@ -115,6 +126,9 @@
 
                                 <div class="flex items-center space-x-3">
                                     <input type="text" id="configDir" class="flex-1 bg-gray-800 text-white px-4 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan w-full" placeholder="/path/to/configs">
+                                    <button onclick="openFolderBrowser('configDir')" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md font-medium transition flex items-center shadow">
+                                        Browse
+                                    </button>
                                 </div>
                             </div>
                             <div class="mt-6">
@@ -203,6 +217,35 @@
         </div>
     </div>
 
+
+    <!-- Folder Browser Modal -->
+    <div id="folderBrowserModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity">
+        <div class="bg-servarrCard w-full max-w-2xl rounded-lg shadow-xl border border-servarrBorder overflow-hidden scale-95 transition-transform" id="folderBrowserContent">
+            <div class="px-6 py-4 border-b border-servarrBorder flex justify-between items-center bg-servarrBg">
+                <h3 class="text-lg font-bold">Select Directory</h3>
+                <button onclick="closeFolderBrowser()" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center space-x-2 mb-4 bg-gray-900 rounded border border-gray-700 p-2">
+                    <button id="folderUpBtn" onclick="browseFolderUp()" class="p-1 hover:bg-gray-700 rounded text-gray-400 transition" title="Go up one level">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                    </button>
+                    <div id="currentFolderPath" class="text-sm font-mono text-gray-300 flex-1 px-2 truncate">/</div>
+                </div>
+
+                <div id="folderList" class="bg-gray-800 rounded border border-gray-700 h-64 overflow-y-auto">
+                    <!-- Directory items injected here -->
+                    <div class="flex items-center justify-center h-full text-gray-500">Loading...</div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-servarrBorder flex justify-end space-x-3 bg-servarrBg">
+                <button onclick="closeFolderBrowser()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-md font-medium transition text-sm">Cancel</button>
+                <button onclick="selectCurrentFolder()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition text-sm">Select This Folder</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-5 right-5 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
@@ -426,10 +469,26 @@
 
 
         let selectedApps = new Set();
+        let collapsedCards = new Set();
         let overseerrLinkedKeys = [];
         let prowlarrLinkedKeys = [];
         let allDiscoveredApps = [];
         let appHostnames = {};
+
+        function toggleCardCollapse(apiKey) {
+            const bodyEl = document.getElementById(`card-body-${apiKey}`);
+            const iconEl = document.getElementById(`collapse-icon-${apiKey}`);
+
+            if (collapsedCards.has(apiKey)) {
+                collapsedCards.delete(apiKey);
+                if (bodyEl) bodyEl.classList.remove('hidden');
+                if (iconEl) iconEl.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>';
+            } else {
+                collapsedCards.add(apiKey);
+                if (bodyEl) bodyEl.classList.add('hidden');
+                if (iconEl) iconEl.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>';
+            }
+        }
 
         async function saveHostname(apiKey, hostname) {
             try {
@@ -552,6 +611,35 @@
             renderAllCards();
         }
 
+        function applyHostnameToAllApps() {
+            const inputVal = document.getElementById('globalHostnameInput').value.trim();
+            if (!inputVal) {
+                showToast('Info', 'Please enter a hostname to apply.', false);
+                return;
+            }
+
+            if (!allDiscoveredApps || allDiscoveredApps.length === 0) return;
+
+            let updateCount = 0;
+            allDiscoveredApps.forEach(app => {
+                const apiKey = app.apiKey;
+                if (apiKey) {
+                    const el = document.getElementById('hostname-' + apiKey);
+                    if (el && el.value !== inputVal) {
+                        el.value = inputVal;
+                        handleHostnameChange(apiKey, inputVal);
+                        updateCount++;
+                    }
+                }
+            });
+
+            if (updateCount > 0) {
+                showToast('Success', `Updated hostname for ${updateCount} application(s).`);
+            } else {
+                showToast('Info', 'Hostnames are already set to this value.', false);
+            }
+        }
+
         const renderCard = (appData) => {
             const accentColor = getAppColor(appData.app);
             const urlBaseDisplay = appData.urlBase ? appData.urlBase : '/';
@@ -559,6 +647,7 @@
             const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
             const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr'].includes(appData.app.toLowerCase());
             const isSelected = selectedApps.has(appData.apiKey);
+            const isCollapsed = collapsedCards.has(appData.apiKey);
 
             let cardClasses = `bg-servarrCard rounded-lg shadow-lg border border-servarrBorder overflow-hidden flex flex-col transition hover:border-gray-600`;
             if (isSelectable && isSelected) {
@@ -699,6 +788,9 @@
 
             const appOptions = ['Sonarr', 'Radarr', 'Lidarr', 'Readarr', 'Prowlarr', 'Overseerr', 'Whisparr', 'Unknown'];
             const selectOptions = appOptions.map(opt => `<option value="${opt}" ${opt.toLowerCase() === appData.app.toLowerCase() ? 'selected' : ''}>${opt}</option>`).join('');
+            const collapseIcon = isCollapsed
+                ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>'
+                : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>';
 
             return `
                 <div class="${cardClasses} relative ${isSelectable && isSetupComplete ? 'cursor-pointer' : ''}" ${isSelectable && isSetupComplete ? `onclick="toggleAppSelection('${appData.apiKey}')"` : ''}>
@@ -710,35 +802,42 @@
                                 ${selectOptions}
                             </select>
                             ${linkedBadge}
-                            <span class="ml-auto px-2.5 py-1 bg-gray-800 text-xs font-medium rounded text-gray-300 border border-gray-700">Port ${appData.port}</span>
-                        </div>
-
-                        <div class="space-y-3 flex-1">
-                            <div>
-                                <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider flex items-center">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="ml-1 cursor-help text-gray-400 hover:text-white">ⓘ</span></label>
-                                <input type="text" id="hostname-${appData.apiKey}" onchange="handleHostnameChange('${appData.apiKey}', this.value)" onclick="event.stopPropagation()" value="${appData.hostname || appHostnames[appData.apiKey] || 'localhost'}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
-                            </div>
-                            <div>
-                                <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">API Key</label>
-                                <div class="mt-1 flex items-center bg-gray-900 rounded border border-gray-700 p-2">
-                                    <code class="text-sm text-gray-300 font-mono truncate flex-1">${appData.apiKey || 'Not found'}</code>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">URL Base</label>
-                                    <p class="text-sm text-gray-300 mt-0.5 font-mono">${urlBaseDisplay}</p>
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Config Path</label>
-                                    <p class="text-xs text-gray-400 mt-0.5 truncate max-w-[120px]" title="${appData.path}">.../${appData.path.split('/').pop()}</p>
-                                </div>
+                            <div class="ml-auto flex items-center space-x-2">
+                                <span class="px-2.5 py-1 bg-gray-800 text-xs font-medium rounded text-gray-300 border border-gray-700">Port ${appData.port}</span>
+                                <button onclick="event.stopPropagation(); toggleCardCollapse('${appData.apiKey}')" class="text-gray-400 hover:text-white transition p-1">
+                                    <svg id="collapse-icon-${appData.apiKey}" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">${collapseIcon}</svg>
+                                </button>
                             </div>
                         </div>
-                        ${qualityAction}
-                        ${setupAction}
-                        ${linkButton}
+
+                        <div id="card-body-${appData.apiKey}" class="${isCollapsed ? 'hidden' : ''} flex-1 flex flex-col">
+                            <div class="space-y-3 flex-1">
+                                <div>
+                                    <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider flex items-center">Hostname / IP <span title="If running in Docker, 'localhost' refers to this container. Use your Server IP or Container Name." class="ml-1 cursor-help text-gray-400 hover:text-white">ⓘ</span></label>
+                                    <input type="text" id="hostname-${appData.apiKey}" onchange="handleHostnameChange('${appData.apiKey}', this.value)" onclick="event.stopPropagation()" value="${appData.hostname || appHostnames[appData.apiKey] || 'localhost'}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 font-mono rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">API Key</label>
+                                    <div class="mt-1 flex items-center bg-gray-900 rounded border border-gray-700 p-2">
+                                        <code class="text-sm text-gray-300 font-mono truncate flex-1">${appData.apiKey || 'Not found'}</code>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">URL Base</label>
+                                        <p class="text-sm text-gray-300 mt-0.5 font-mono">${urlBaseDisplay}</p>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Config Path</label>
+                                        <p class="text-xs text-gray-400 mt-0.5 truncate max-w-[120px]" title="${appData.path}">.../${appData.path.split('/').pop()}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            ${qualityAction}
+                            ${setupAction}
+                            ${linkButton}
+                        </div>
                     </div>
                 </div>
             `;
@@ -763,15 +862,31 @@
             const error = document.getElementById('error');
             const resultsGrid = document.getElementById('resultsGrid');
             const emptyState = document.getElementById('emptyState');
+            const globalHostnameBar = document.getElementById('globalHostnameBar');
 
             loading.classList.remove('hidden');
             error.classList.add('hidden');
             resultsGrid.innerHTML = '';
             emptyState.classList.add('hidden');
+            globalHostnameBar.classList.add('hidden');
 
             selectedApps.clear();
 
             try {
+                const settingsRes = await fetch('/api/settings');
+                const settingsData = await settingsRes.json();
+
+                if (settingsData.status === 'success' && !settingsData.data.config_dir) {
+                    allDiscoveredApps = [];
+                    emptyState.classList.remove('hidden');
+                    emptyState.innerHTML = `
+                        <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        <p class="text-lg text-gray-300">Welcome to Syncarr!</p>
+                        <p class="text-sm mt-2 text-gray-400">To get started, please go to <a href="#" onclick="showView('settings')" class="text-servarrCyan hover:underline">Settings</a> and configure your Scan Directory.</p>
+                    `;
+                    return;
+                }
+
                 const response = await fetch('/api/discover');
                 const data = await response.json();
 
@@ -782,6 +897,7 @@
                 if (data.data && data.data.length > 0) {
                     allDiscoveredApps = data.data;
                     renderAllCards();
+                    globalHostnameBar.classList.remove('hidden');
                 } else {
                     allDiscoveredApps = [];
                     emptyState.classList.remove('hidden');
@@ -975,6 +1091,93 @@
             setTimeout(() => {
                 modal.classList.add('hidden');
             }, 300);
+        }
+
+        let currentBrowserTarget = null;
+        let currentBrowserPath = '/';
+        let currentBrowserParent = '/';
+
+        async function openFolderBrowser(targetInputId) {
+            currentBrowserTarget = targetInputId;
+            const targetInput = document.getElementById(targetInputId);
+
+            let initialPath = targetInput.value.trim() || '/';
+
+            const modal = document.getElementById('folderBrowserModal');
+            const content = document.getElementById('folderBrowserContent');
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-95');
+            }, 10);
+
+            await loadDirectory(initialPath);
+        }
+
+        function closeFolderBrowser() {
+            const modal = document.getElementById('folderBrowserModal');
+            const content = document.getElementById('folderBrowserContent');
+            modal.classList.add('opacity-0');
+            content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                currentBrowserTarget = null;
+            }, 300);
+        }
+
+        async function loadDirectory(path) {
+            const list = document.getElementById('folderList');
+            const pathDisplay = document.getElementById('currentFolderPath');
+
+            list.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500"><svg class="animate-spin h-6 w-6 mr-2 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Loading...</div>';
+
+            try {
+                const response = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to load directory');
+                }
+
+                currentBrowserPath = data.current_path;
+                currentBrowserParent = data.parent_path;
+                pathDisplay.innerText = currentBrowserPath;
+
+                if (data.data.length === 0) {
+                    list.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Directory is empty</div>';
+                    return;
+                }
+
+                list.innerHTML = data.data.map(dir => `
+                    <div onclick="loadDirectory('${dir.path.replace(/\\/g, '\\\\')}')" class="flex items-center px-4 py-3 hover:bg-gray-700 cursor-pointer border-b border-gray-700/50 transition">
+                        <svg class="w-5 h-5 text-yellow-500 mr-3" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
+                        <span class="text-sm text-gray-300 font-medium">${dir.name}</span>
+                    </div>
+                `).join('');
+
+            } catch (err) {
+                list.innerHTML = `<div class="flex items-center justify-center h-full text-red-400 px-4 text-center">${err.message}</div>`;
+                showToast('Error', err.message, true);
+
+                // If it fails, fallback to root if we aren't already there
+                if (path !== '/') {
+                    setTimeout(() => loadDirectory('/'), 2000);
+                }
+            }
+        }
+
+        function browseFolderUp() {
+            if (currentBrowserParent) {
+                loadDirectory(currentBrowserParent);
+            }
+        }
+
+        function selectCurrentFolder() {
+            if (currentBrowserTarget && currentBrowserPath) {
+                document.getElementById(currentBrowserTarget).value = currentBrowserPath;
+            }
+            closeFolderBrowser();
         }
 
         function toggleAuthFields() {

@@ -91,6 +91,10 @@ def scan_configs(base_dir):
     """
     discovered_apps = []
 
+    if not base_dir:
+        print("Directory base_dir is empty.")
+        return discovered_apps
+
     if not os.path.exists(base_dir):
         print(f"Directory {base_dir} does not exist.")
         return discovered_apps
