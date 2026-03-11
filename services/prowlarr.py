@@ -40,8 +40,17 @@ async def add_app_to_prowlarr(
 
     # We need to build the specific payload Prowlarr expects
     # The Implementation string varies based on the app
-    # Prowlarr expects 'Sonarr' or 'Radarr' for implementation
-    implementation = "Sonarr" if "sonarr" in app_name.lower() else "Radarr" if "radarr" in app_name.lower() else "Unknown"
+    app_name_lower = app_name.lower()
+    if "sonarr" in app_name_lower:
+        implementation = "Sonarr"
+    elif "radarr" in app_name_lower:
+        implementation = "Radarr"
+    elif "lidarr" in app_name_lower:
+        implementation = "Lidarr"
+    elif "readarr" in app_name_lower:
+        implementation = "Readarr"
+    else:
+        implementation = "Unknown"
 
     payload = {
         "name": app_name,
@@ -68,5 +77,9 @@ async def add_app_to_prowlarr(
 
     async with httpx.AsyncClient() as client:
         response = await client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Failed to add app to Prowlarr. Status: {e.response.status_code}, Response: {e.response.text}, Payload: {payload}, URL: {url}")
+            raise
         return response.json()
