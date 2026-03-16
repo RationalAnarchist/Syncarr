@@ -1,0 +1,8 @@
+{
+    "app_hostnames": {
+        "test_prowlarr_key": "localhost",
+        "test_sonarr_key": "localhost",
+        "overseerr_test_key": "localhost",
+        "test_radarr_key": "192.168.1.10"
+    }
+}

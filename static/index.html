@@ -165,6 +165,9 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
+            <div id="qbittorrentWarning" class="hidden px-6 py-3 bg-yellow-900/50 border-b border-yellow-700">
+                <p class="text-sm text-yellow-400"><strong>Note:</strong> Please stop your qBittorrent container/service before saving setup, otherwise your changes may be overwritten on shutdown.</p>
+            </div>
             <div class="p-6 space-y-4">
                 <input type="hidden" id="setupApiKey">
 
@@ -202,7 +205,7 @@
                     </div>
                 </div>
 
-                <div>
+                <div id="setupRootFolderContainer">
                     <label class="block text-sm font-medium text-gray-400 mb-1">Root Folder</label>
                     <input type="text" id="setupRootFolder" class="w-full bg-gray-900 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:border-servarrCyan text-sm" placeholder="/data/media/movies">
                     <p class="text-xs text-gray-500 mt-1">This path must be accessible by the app container.</p>
@@ -646,7 +649,7 @@
             const urlBaseDisplay = appData.urlBase ? appData.urlBase : '/';
 
             const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
-            const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr'].includes(appData.app.toLowerCase());
+            const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr', 'nzbget', 'qbittorrent'].includes(appData.app.toLowerCase());
             const isSelected = selectedApps.has(appData.apiKey);
             const isCollapsed = collapsedCards.has(appId);
 
@@ -1033,6 +1036,13 @@
             document.getElementById('setupApiKey').value = apiKey || '';
             currentSetupPath = path || null;
 
+            const qbittorrentWarning = document.getElementById('qbittorrentWarning');
+            if (appName.toLowerCase() === 'qbittorrent') {
+                qbittorrentWarning.classList.remove('hidden');
+            } else {
+                qbittorrentWarning.classList.add('hidden');
+            }
+
             // Try to pre-fill the host if the user typed something into the card's hostname input
             let hostValue = 'localhost';
             const appId = apiKey || btoa(encodeURIComponent(path)).replace(/[^a-zA-Z0-9]/g, '');
@@ -1077,6 +1087,13 @@
             document.getElementById('setupRootFolder').value = '';
 
             toggleAuthFields();
+
+            const rootFolderContainer = document.getElementById('setupRootFolderContainer');
+            if (appName.toLowerCase() === 'nzbget' || appName.toLowerCase() === 'qbittorrent') {
+                rootFolderContainer.classList.add('hidden');
+            } else {
+                rootFolderContainer.classList.remove('hidden');
+            }
 
             const modal = document.getElementById('setupModal');
             const content = document.getElementById('setupModalContent');
@@ -1187,10 +1204,24 @@
         function toggleAuthFields() {
             const method = document.getElementById('setupAuthMethod').value;
             const fields = document.getElementById('setupAuthFields');
-            if (method === 'None' || method === 'External') {
-                fields.classList.add('hidden');
-            } else {
+
+            const appName = document.getElementById('setupModalTitle').innerText.replace('Setup ', '');
+
+            if (appName.toLowerCase() === 'nzbget' || appName.toLowerCase() === 'qbittorrent') {
                 fields.classList.remove('hidden');
+                // For these apps, the auth method itself is fixed and irrelevant to UI visibility,
+                // but the username and password fields must always be visible.
+                document.getElementById('setupAuthRequired').parentElement.classList.add('hidden');
+                document.getElementById('setupAuthMethod').parentElement.classList.add('hidden');
+            } else {
+                document.getElementById('setupAuthRequired').parentElement.classList.remove('hidden');
+                document.getElementById('setupAuthMethod').parentElement.classList.remove('hidden');
+
+                if (method === 'None' || method === 'External') {
+                    fields.classList.add('hidden');
+                } else {
+                    fields.classList.remove('hidden');
+                }
             }
         }
 
