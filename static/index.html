@@ -168,6 +168,9 @@
             <div id="qbittorrentWarning" class="hidden px-6 py-3 bg-yellow-900/50 border-b border-yellow-700">
                 <p class="text-sm text-yellow-400"><strong>Note:</strong> Please stop your qBittorrent container/service before saving setup, otherwise your changes may be overwritten on shutdown.</p>
             </div>
+            <div id="nzbgetWarning" class="hidden px-6 py-3 bg-blue-900/50 border-b border-blue-700">
+                <p class="text-sm text-blue-400"><strong>Note:</strong> You will need to manually restart your NZBGet container/service for the new credentials to take effect.</p>
+            </div>
             <div class="p-6 space-y-4">
                 <input type="hidden" id="setupApiKey">
 
@@ -880,7 +883,7 @@
                 const settingsRes = await fetch('/api/settings', { cache: 'no-store' });
                 const settingsData = await settingsRes.json();
 
-                if (settingsData.status === 'success' && !settingsData.data.config_dir) {
+                if (settingsData.status === 'success' && !settingsData.data.config_dir && !settingsData.data.env_override) {
                     allDiscoveredApps = [];
                     emptyState.classList.remove('hidden');
                     emptyState.innerHTML = `
@@ -1037,10 +1040,15 @@
             currentSetupPath = path || null;
 
             const qbittorrentWarning = document.getElementById('qbittorrentWarning');
+            const nzbgetWarning = document.getElementById('nzbgetWarning');
+
+            qbittorrentWarning.classList.add('hidden');
+            nzbgetWarning.classList.add('hidden');
+
             if (appName.toLowerCase() === 'qbittorrent') {
                 qbittorrentWarning.classList.remove('hidden');
-            } else {
-                qbittorrentWarning.classList.add('hidden');
+            } else if (appName.toLowerCase() === 'nzbget') {
+                nzbgetWarning.classList.remove('hidden');
             }
 
             // Try to pre-fill the host if the user typed something into the card's hostname input
