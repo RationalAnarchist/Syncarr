@@ -139,7 +139,7 @@ def get_configs_dir():
     # Check settings file
     if os.path.exists(SETTINGS_FILE):
         try:
-            with open(SETTINGS_FILE, "r") as f:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 settings = json.load(f)
                 if "config_dir" in settings and settings["config_dir"]:
                     return settings["config_dir"]
@@ -235,7 +235,7 @@ async def setup_app(request: SetupAppRequest):
     """
     discovered_apps = scan_configs(get_configs_dir())
 
-    app_config = next((app for app in discovered_apps if app.get('apiKey') == request.api_key), None)
+    app_config = next((app for app in discovered_apps if (app.get('apiKey') == request.api_key and request.api_key) or (request.path and app.get('path') == request.path)), None)
     if not app_config:
         raise HTTPException(status_code=404, detail=f"App with given API key not found.")
 
