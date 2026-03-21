@@ -298,8 +298,10 @@
 
             const appsToLink = Array.from(selectedApps).map(key => {
                 const hostnameInput = document.getElementById('hostname-' + key);
+                // Try to find the actual appData to get the true apiKey, as key might be appId
+                const appData = allDiscoveredApps.find(a => (a.apiKey || btoa(encodeURIComponent(a.path)).replace(/[^a-zA-Z0-9]/g, '')) === key);
                 return {
-                    api_key: key,
+                    api_key: appData && appData.apiKey ? appData.apiKey : key,
                     hostname: hostnameInput ? hostnameInput.value.trim() || 'localhost' : 'localhost'
                 };
             });
@@ -367,8 +369,10 @@
 
             const appsToLink = Array.from(selectedApps).map(key => {
                 const hostnameInput = document.getElementById('hostname-' + key);
+                // Try to find the actual appData to get the true apiKey, as key might be appId
+                const appData = allDiscoveredApps.find(a => (a.apiKey || btoa(encodeURIComponent(a.path)).replace(/[^a-zA-Z0-9]/g, '')) === key);
                 return {
-                    api_key: key,
+                    api_key: appData && appData.apiKey ? appData.apiKey : key,
                     hostname: hostnameInput ? hostnameInput.value.trim() || 'localhost' : 'localhost'
                 };
             });
@@ -601,12 +605,12 @@
             }
         }
 
-        function toggleAppSelection(apiKey) {
-            if (!apiKey) return;
-            if (selectedApps.has(apiKey)) {
-                selectedApps.delete(apiKey);
+        function toggleAppSelection(appId) {
+            if (!appId) return;
+            if (selectedApps.has(appId)) {
+                selectedApps.delete(appId);
             } else {
-                selectedApps.add(apiKey);
+                selectedApps.add(appId);
             }
             renderAllCards();
         }
@@ -645,9 +649,9 @@
             const accentColor = getAppColor(appData.app);
             const urlBaseDisplay = appData.urlBase ? appData.urlBase : '/';
 
-            const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
+            const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr', 'nzbget', 'qbittorrent'].includes(appData.app.toLowerCase());
             const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr'].includes(appData.app.toLowerCase());
-            const isSelected = selectedApps.has(appData.apiKey);
+            const isSelected = selectedApps.has(appId);
             const isCollapsed = collapsedCards.has(appId);
 
             let cardClasses = `bg-servarrCard rounded-lg shadow-lg border border-servarrBorder overflow-hidden flex flex-col transition hover:border-gray-600`;
@@ -674,8 +678,8 @@
                         </div>
                     `;
                     // Remove from selected apps if setup is not complete
-                    if (selectedApps.has(appData.apiKey)) {
-                        selectedApps.delete(appData.apiKey);
+                    if (selectedApps.has(appId)) {
+                        selectedApps.delete(appId);
                     }
                 }
             }
@@ -794,7 +798,7 @@
                 : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>';
 
             return `
-                <div class="${cardClasses} relative ${isSelectable && isSetupComplete ? 'cursor-pointer' : ''}" ${isSelectable && isSetupComplete ? `onclick="toggleAppSelection('${appData.apiKey}')"` : ''}>
+                <div class="${cardClasses} relative ${isSelectable && isSetupComplete ? 'cursor-pointer' : ''}" ${isSelectable && isSetupComplete ? `onclick="toggleAppSelection('${appId}')"` : ''}>
                     ${selectionIndicator}
                     <div class="h-1 ${accentColor} w-full"></div>
                     <div class="p-5 flex-1 flex flex-col relative">
