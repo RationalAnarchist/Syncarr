@@ -2,20 +2,15 @@ import os
 import xml.etree.ElementTree as ET
 import json
 
-KNOWN_APPS = ['sonarr', 'radarr', 'lidarr', 'prowlarr', 'overseerr', 'readarr', 'whisparr']
+KNOWN_APPS = ['sonarr', 'radarr', 'lidarr', 'prowlarr', 'overseerr', 'readarr', 'whisparr', 'nzbget', 'qbittorrent']
 
 def parse_config(filepath):
-    """
-    Parses a config.xml file to extract ApiKey, Port, and UrlBase.
-    Returns a dictionary with these values or None if parsing fails.
-    """
     try:
         tree = ET.parse(filepath)
         root = tree.getroot()
 
         config_data = {}
 
-        # Helper to extract text from a tag safely
         def get_tag_text(tag_name, default=""):
             elem = root.find(tag_name)
             return elem.text if elem is not None and elem.text else default
@@ -25,7 +20,6 @@ def parse_config(filepath):
         url_base = get_tag_text("UrlBase")
         auth_method = get_tag_text("AuthenticationMethod")
 
-        # Require at least Port to be useful. ApiKey is also generally required for *arr apps.
         if port:
             config_data["ApiKey"] = api_key
             config_data["Port"] = port
@@ -33,6 +27,63 @@ def parse_config(filepath):
             config_data["AuthenticationMethod"] = auth_method
             return config_data
         return None
+    except Exception as e:
+        print(f"Error parsing {filepath}: {e}")
+        return None
+
+def parse_nzbget_config(filepath):
+    try:
+        config_data = {}
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' in line:
+                    key, val = line.split('=', 1)
+                    key = key.strip()
+                    val = val.strip()
+                    if key == "ControlPort":
+                        config_data["Port"] = val
+                    elif key == "ControlUsername":
+                        config_data["Username"] = val
+                    elif key == "ControlPassword":
+                        config_data["Password"] = val
+
+        if config_data.get("Port"):
+            config_data["ApiKey"] = ""
+            config_data["UrlBase"] = ""
+            return config_data
+        return None
+    except Exception as e:
+        print(f"Error parsing {filepath}: {e}")
+        return None
+
+def parse_qbittorrent_config(filepath):
+    try:
+        config_data = {}
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' in line:
+                    key, val = line.split('=', 1)
+                    key = key.strip()
+                    val = val.strip()
+                    if key == r"WebUI\Port":
+                        config_data["Port"] = val
+                    elif key == r"WebUI\Username":
+                        config_data["Username"] = val
+                    elif key == r"WebUI\Password_PBKDF2":
+                        config_data["Password"] = val
+
+        if "Port" not in config_data:
+            config_data["Port"] = "8080"
+
+        config_data["ApiKey"] = ""
+        config_data["UrlBase"] = ""
+        return config_data
     except Exception as e:
         print(f"Error parsing {filepath}: {e}")
         return None
@@ -68,13 +119,17 @@ def parse_settings_json(filepath):
         return None
 
 def identify_app(filepath, config_data, settings_data=None):
-    """
-    Guesses the app based on the directory name.
-    Falls back to unknown if not in the KNOWN_APPS list.
-    """
     if settings_data and 'app_types' in settings_data:
         if filepath in settings_data['app_types']:
             return settings_data['app_types'][filepath].capitalize()
+
+    filename = os.path.basename(filepath).lower()
+    if filename == 'nzbget.conf':
+        return 'Nzbget'
+    elif filename == 'qbittorrent.conf':
+        return 'Qbittorrent'
+    elif filename == 'settings.json':
+        return 'Overseerr'
 
     parent_dir = os.path.basename(os.path.dirname(filepath)).lower()
 
@@ -85,10 +140,6 @@ def identify_app(filepath, config_data, settings_data=None):
     return "Unknown"
 
 def scan_configs(base_dir):
-    """
-    Recursively scans base_dir for config.xml files.
-    Returns a list of dictionaries with app info.
-    """
     discovered_apps = []
 
     if not base_dir:
@@ -119,15 +170,56 @@ def scan_configs(base_dir):
                 if config_data:
                     app_name = identify_app(filepath, config_data, settings_data)
                     api_key = config_data.get("ApiKey")
+                    hostname = app_hostnames.get(api_key) if api_key else app_hostnames.get(filepath)
                     discovered_apps.append({
                         "app": app_name,
                         "path": filepath,
-                        "hostname": app_hostnames.get(api_key, "localhost"),
+                        "hostname": hostname or "localhost",
                         "apiKey": api_key,
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),
                         "linkedApiKeys": config_data.get("LinkedApiKeys", []),
                         "authMethod": config_data.get("AuthenticationMethod")
+                    })
+            elif file.lower() == 'nzbget.conf':
+                filepath = os.path.join(root, file)
+                config_data = parse_nzbget_config(filepath)
+
+                if config_data:
+                    app_name = identify_app(filepath, config_data, settings_data)
+                    api_key = config_data.get("ApiKey")
+                    hostname = app_hostnames.get(api_key) if api_key else app_hostnames.get(filepath)
+                    discovered_apps.append({
+                        "app": app_name,
+                        "path": filepath,
+                        "hostname": hostname or "localhost",
+                        "apiKey": api_key,
+                        "port": config_data.get("Port"),
+                        "urlBase": config_data.get("UrlBase"),
+                        "linkedApiKeys": config_data.get("LinkedApiKeys", []),
+                        "authMethod": config_data.get("AuthenticationMethod"),
+                        "username": config_data.get("Username", ""),
+                        "password": config_data.get("Password", "")
+                    })
+            elif file.lower() == 'qbittorrent.conf':
+                filepath = os.path.join(root, file)
+                config_data = parse_qbittorrent_config(filepath)
+
+                if config_data:
+                    app_name = identify_app(filepath, config_data, settings_data)
+                    api_key = config_data.get("ApiKey")
+                    hostname = app_hostnames.get(api_key) if api_key else app_hostnames.get(filepath)
+                    discovered_apps.append({
+                        "app": app_name,
+                        "path": filepath,
+                        "hostname": hostname or "localhost",
+                        "apiKey": api_key,
+                        "port": config_data.get("Port"),
+                        "urlBase": config_data.get("UrlBase"),
+                        "linkedApiKeys": config_data.get("LinkedApiKeys", []),
+                        "authMethod": config_data.get("AuthenticationMethod"),
+                        "username": config_data.get("Username", ""),
+                        "password": config_data.get("Password", "")
                     })
             elif file.lower() == 'settings.json':
                 filepath = os.path.join(root, file)
@@ -136,10 +228,11 @@ def scan_configs(base_dir):
                 if config_data:
                     app_name = identify_app(filepath, config_data, settings_data)
                     api_key = config_data.get("ApiKey")
+                    hostname = app_hostnames.get(api_key) if api_key else app_hostnames.get(filepath)
                     discovered_apps.append({
                         "app": app_name,
                         "path": filepath,
-                        "hostname": app_hostnames.get(api_key, "localhost"),
+                        "hostname": hostname or "localhost",
                         "apiKey": api_key,
                         "port": config_data.get("Port"),
                         "urlBase": config_data.get("UrlBase"),

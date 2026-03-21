@@ -13,6 +13,7 @@ from services.prowlarr import add_app_to_prowlarr
 from services.servarr_clients import add_download_client, build_qbittorrent_payload, build_nzbget_payload, update_quality_definitions
 from services.overseerr import add_radarr_to_overseerr, add_sonarr_to_overseerr, sync_overseerr_profiles
 import httpx
+import threading
 from pydantic import BaseModel
 from typing import Optional
 
@@ -31,6 +32,7 @@ class LinkDownloadersRequest(BaseModel):
 
 class AppQualityRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     min_mb_per_min: float
     max_mb_per_min: float
     preferred_mb_per_min: float
@@ -40,10 +42,12 @@ class UpdateQualityRequest(BaseModel):
 
 class AppLinkInfo(BaseModel):
     api_key: str
+    path: Optional[str] = None
     hostname: str = "localhost"
 
 class SetupAppRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     host: str = "localhost"
     auth_method: Optional[str] = None
     auth_required: Optional[str] = None
@@ -53,12 +57,14 @@ class SetupAppRequest(BaseModel):
 
 class LinkOverseerrRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     host: str = "localhost"
     port: int = 5055
     apps_to_link: list[AppLinkInfo] = []
 
 class LinkProwlarrRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     host: str = "localhost"
     port: int = 9696
     apps_to_link: list[AppLinkInfo] = []
@@ -73,24 +79,28 @@ class AppTypeOverrideRequest(BaseModel):
 
 class AppHostnameOverrideRequest(BaseModel):
     api_key: str
+    path: Optional[str] = None
     hostname: str
 
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
+settings_lock = threading.Lock()
 
 def load_settings():
     settings = {}
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-        except Exception as e:
-            logger.error(f"Error reading settings file: {e}")
+    with settings_lock:
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+            except Exception as e:
+                logger.error(f"Error reading settings file: {e}")
     return settings
 
 def save_settings_dict(settings):
     try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=4)
+        with settings_lock:
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=4)
         return True
     except Exception as e:
         logger.error(f"Error writing settings file: {e}")
@@ -109,17 +119,18 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 def setup_logging():
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r") as f:
-                settings = json.load(f)
-                log_level_str = settings.get("log_level", "INFO").upper()
-                level = getattr(logging, log_level_str, logging.INFO)
-                logger.setLevel(level)
-                ch.setLevel(level)
-                logger.info(f"Logging level set to {log_level_str}")
-        except Exception as e:
-            print(f"Error setting up logging: {e}")
+    with settings_lock:
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+                    log_level_str = settings.get("log_level", "INFO").upper()
+                    level = getattr(logging, log_level_str, logging.INFO)
+                    logger.setLevel(level)
+                    ch.setLevel(level)
+                    logger.info(f"Logging level set to {log_level_str}")
+            except Exception as e:
+                print(f"Error setting up logging: {e}")
 
 setup_logging()
 
@@ -131,14 +142,15 @@ def get_configs_dir():
         return env_dir
 
     # Check settings file
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r") as f:
-                settings = json.load(f)
-                if "config_dir" in settings and settings["config_dir"]:
-                    return settings["config_dir"]
-        except Exception as e:
-            print(f"Error reading settings file: {e}")
+    with settings_lock:
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+                    if "config_dir" in settings and settings["config_dir"]:
+                        return settings["config_dir"]
+            except Exception as e:
+                print(f"Error reading settings file: {e}")
 
     # Default fallback
     return ""
@@ -149,12 +161,13 @@ def get_settings():
     Endpoint to retrieve current settings.
     """
     settings = {}
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r") as f:
-                settings = json.load(f)
-        except Exception as e:
-            print(f"Error reading settings file: {e}")
+    with settings_lock:
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+            except Exception as e:
+                print(f"Error reading settings file: {e}")
 
     return JSONResponse(content={
         "status": "success",
@@ -212,7 +225,10 @@ def update_app_hostname(request: AppHostnameOverrideRequest):
     if "app_hostnames" not in settings:
         settings["app_hostnames"] = {}
 
-    settings["app_hostnames"][request.api_key] = request.hostname
+    if request.api_key:
+        settings["app_hostnames"][request.api_key] = request.hostname
+    elif request.path:
+        settings["app_hostnames"][request.path] = request.hostname
 
     if not save_settings_dict(settings):
         raise HTTPException(status_code=500, detail="Failed to save app hostname")
@@ -226,7 +242,7 @@ async def setup_app(request: SetupAppRequest):
     """
     discovered_apps = scan_configs(get_configs_dir())
 
-    app_config = next((app for app in discovered_apps if app.get('apiKey') == request.api_key), None)
+    app_config = next((app for app in discovered_apps if (app.get('apiKey') == request.api_key and request.api_key) or (request.path and app.get('path') == request.path)), None)
     if not app_config:
         raise HTTPException(status_code=404, detail=f"App with given API key not found.")
 
