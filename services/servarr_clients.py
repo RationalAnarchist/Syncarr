@@ -65,11 +65,11 @@ def build_nzbget_payload(client_config):
         ]
     }
 
-async def add_download_client(app_url: str, app_api_key: str, payload: dict):
+async def add_download_client(app_url: str, app_api_key: str, payload: dict, api_version: str = "v3"):
     """
     Add a download client to a Servarr instance.
     """
-    url = f"{app_url}/api/v3/downloadclient"
+    url = f"{app_url}/api/{api_version}/downloadclient"
     headers = {"X-Api-Key": app_api_key}
 
     async with httpx.AsyncClient() as client:

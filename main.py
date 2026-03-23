@@ -29,6 +29,7 @@ class ClientConfig(BaseModel):
 class LinkDownloadersRequest(BaseModel):
     qbittorrent: Optional[ClientConfig] = None
     nzbget: Optional[ClientConfig] = None
+    apps_to_link: list[str] = []
 
 class AppQualityRequest(BaseModel):
     api_key: str
@@ -778,7 +779,7 @@ async def link_overseerr(request: LinkOverseerrRequest):
 @app.post("/api/link/downloaders")
 async def link_downloaders(request: LinkDownloadersRequest):
     """
-    Endpoint to automatically connect Sonarr, Radarr, Lidarr, and Readarr to qBittorrent and NZBGet.
+    Endpoint to automatically connect Sonarr, Radarr, Lidarr, Readarr, and Prowlarr to qBittorrent and NZBGet.
     """
     discovered_apps = scan_configs(get_configs_dir())
 
@@ -787,15 +788,28 @@ async def link_downloaders(request: LinkDownloadersRequest):
 
     for app in discovered_apps:
         app_name = app['app']
-        if app_name.lower() in ['sonarr', 'radarr', 'lidarr', 'readarr']:
+
+        # Only link if the app is supported and either apps_to_link is empty (link all) or the app is specified
+        if app_name.lower() in ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr']:
+            app_api_key = app.get('apiKey')
+            app_id = app_api_key or ""
+
+            # If request.apps_to_link is provided, skip if this app is not in the list
+            if request.apps_to_link and app_id not in request.apps_to_link and app_name.lower() not in request.apps_to_link:
+                continue
+
             logger.debug(f"Attempting to link Downloaders to {app_name}")
             app_ip = app.get('hostname', 'localhost')
             app_port = app['port']
-            app_api_key = app['apiKey']
             app_url_base = app.get('urlBase', '')
 
             # Use full URL if URL base exists
-            app_url = f"http://{app_ip}:{app_port}{app_url_base}"
+            app_url = f"http://{app_ip}:{app_port}{app_url_base}".rstrip('/')
+
+            # Determine API version
+            api_version = "v3"
+            if app_name.lower() in ['lidarr', 'readarr', 'prowlarr']:
+                api_version = "v1"
 
             if request.qbittorrent:
                 logger.debug(f"Attempting to link qBittorrent to {app_name}")
@@ -804,7 +818,8 @@ async def link_downloaders(request: LinkDownloadersRequest):
                     result = await add_download_client(
                         app_url=app_url,
                         app_api_key=app_api_key,
-                        payload=payload
+                        payload=payload,
+                        api_version=api_version
                     )
                     logger.info(f"Successfully linked qBittorrent to {app_name}")
                     results.append({"app": app_name, "client": "qbittorrent", "status": "success", "result": result})
@@ -830,7 +845,8 @@ async def link_downloaders(request: LinkDownloadersRequest):
                     result = await add_download_client(
                         app_url=app_url,
                         app_api_key=app_api_key,
-                        payload=payload
+                        payload=payload,
+                        api_version=api_version
                     )
                     logger.info(f"Successfully linked NZBGet to {app_name}")
                     results.append({"app": app_name, "client": "nzbget", "status": "success", "result": result})
