@@ -205,7 +205,8 @@ def scan_configs(base_dir):
                         "linkedApiKeys": config_data.get("LinkedApiKeys", []),
                         "authMethod": config_data.get("AuthenticationMethod"),
                         "username": config_data.get("Username", ""),
-                        "password": config_data.get("Password", "")
+                        "password": config_data.get("Password", ""),
+                        "HasPassword": config_data.get("HasPassword", False)
                     })
             elif file.lower() == 'qbittorrent.conf':
                 filepath = os.path.join(root, file)
@@ -225,7 +226,8 @@ def scan_configs(base_dir):
                         "linkedApiKeys": config_data.get("LinkedApiKeys", []),
                         "authMethod": config_data.get("AuthenticationMethod"),
                         "username": config_data.get("Username", ""),
-                        "password": config_data.get("Password", "")
+                        "password": config_data.get("Password", ""),
+                        "HasPassword": config_data.get("HasPassword", False)
                     })
             elif file.lower() == 'settings.json':
                 filepath = os.path.join(root, file)

@@ -38,7 +38,7 @@ def build_qbittorrent_payload(client_config, target_app_type: str = ""):
         # Readarr requires either tvCategory or category or booksCategory depending on version. Usually 'category' for qbit.
         fields.append({"name": "category", "value": "Books"})
     elif target_app_type == 'prowlarr':
-        fields.append({"name": "category", "value": ""})
+        fields.append({"name": "category", "value": "tv"}) # Prowlarr errors on empty category
 
     return {
         "enable": True,
@@ -81,11 +81,12 @@ def build_nzbget_payload(client_config, target_app_type: str = ""):
     elif target_app_type == 'lidarr':
         fields.append({"name": "musicCategory", "value": "Music"})
     elif target_app_type == 'readarr':
-        # User confirmed 'Software' is an available category
+        # User confirmed 'Software', 'Music' etc are available. Readarr validates 'MusicCategory' too.
         fields.append({"name": "category", "value": "Software"})
-        fields.append({"name": "tvCategory", "value": "Software"}) # Sometimes Readarr uses tvCategory in schema for NZBGet
+        fields.append({"name": "tvCategory", "value": "Software"})
+        fields.append({"name": "musicCategory", "value": "Music"})
     elif target_app_type == 'prowlarr':
-        fields.append({"name": "category", "value": ""})
+        fields.append({"name": "category", "value": "Software"}) # Prowlarr errors on empty category
 
     return {
         "enable": True,
