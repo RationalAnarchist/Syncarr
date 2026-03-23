@@ -814,7 +814,7 @@ async def link_downloaders(request: LinkDownloadersRequest):
             if request.qbittorrent:
                 logger.debug(f"Attempting to link qBittorrent to {app_name}")
                 try:
-                    payload = build_qbittorrent_payload(request.qbittorrent.model_dump())
+                    payload = build_qbittorrent_payload(request.qbittorrent.model_dump(), app_name.lower())
                     result = await add_download_client(
                         app_url=app_url,
                         app_api_key=app_api_key,
@@ -833,14 +833,15 @@ async def link_downloaders(request: LinkDownloadersRequest):
             if request.nzbget:
                 logger.debug(f"Attempting to link NZBGet to {app_name}")
                 try:
-                    payload = build_nzbget_payload(request.nzbget.model_dump())
-                    # the payload differs slightly by implementation, map 'category' logic here:
-                    if app_name.lower() == 'radarr':
-                        # replace tvCategory with movieCategory
-                        for field in payload['fields']:
-                            if field['name'] == 'tvCategory':
-                                field['name'] = 'movieCategory'
-                                field['value'] = request.nzbget.category if request.nzbget.category != 'tv' else 'movies'
+                    payload = build_nzbget_payload(request.nzbget.model_dump(), app_name.lower())
+
+                    # If the user provided a category, and we want to use it, we could add it back dynamically,
+                    # but only if we know the app won't crash on it.
+                    # Since "The category you entered doesn't exist in NZBGet. Create it in NZBGet first."
+                    # occurs on Sonarr, we will just completely omit the category field for all apps.
+                    # If users want categories, they should configure them manually in the Servarr UI after linking,
+                    # or they need to ensure the categories exist in NZBGet *first*. Since Syncarr doesn't create
+                    # categories in NZBGet via API yet, omitting it is the safest bet to ensure successful linking.
 
                     result = await add_download_client(
                         app_url=app_url,

@@ -3,7 +3,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def build_qbittorrent_payload(client_config):
+def build_qbittorrent_payload(client_config, target_app_type: str = ""):
     """
     Build the payload for qBittorrent download client.
     """
@@ -12,6 +12,7 @@ def build_qbittorrent_payload(client_config):
         "name": "qBittorrent",
         "implementation": "QBittorrent",
         "configContract": "QBittorrentSettings",
+        "priority": 1,
         "fields": [
             {
                 "name": "host",
@@ -32,37 +33,44 @@ def build_qbittorrent_payload(client_config):
         ]
     }
 
-def build_nzbget_payload(client_config):
+def build_nzbget_payload(client_config, target_app_type: str = ""):
     """
     Build the payload for NZBGet download client.
     """
+    fields = [
+        {
+            "name": "host",
+            "value": client_config.get("host", "localhost")
+        },
+        {
+            "name": "port",
+            "value": client_config.get("port", 6789)
+        },
+        {
+            "name": "username",
+            "value": client_config.get("username", "")
+        },
+        {
+            "name": "password",
+            "value": client_config.get("password", "")
+        }
+    ]
+
+    # Only add tvCategory if the target is NOT Sonarr, as Sonarr enforces existence
+    # Alternatively, if we know target_app_type is Radarr/Readarr/Lidarr, we could add specific categories.
+    # Sonarr: tvCategory, Radarr: movieCategory. But to avoid "category doesn't exist" errors,
+    # it is often safer to leave them blank unless the user created them, or use the app's default category name.
+    # We will exclude category fields by default or just use empty string so the Servarr apps don't throw validation errors.
+
+    # Adding tvCategory with empty string or not adding it might bypass the validation.
+
     return {
         "enable": True,
         "name": "NZBGet",
         "implementation": "Nzbget",
         "configContract": "NzbgetSettings",
-        "fields": [
-            {
-                "name": "host",
-                "value": client_config.get("host", "localhost")
-            },
-            {
-                "name": "port",
-                "value": client_config.get("port", 6789)
-            },
-            {
-                "name": "username",
-                "value": client_config.get("username", "")
-            },
-            {
-                "name": "password",
-                "value": client_config.get("password", "")
-            },
-            {
-                "name": "tvCategory",
-                "value": client_config.get("category", "tv")
-            }
-        ]
+        "priority": 1,
+        "fields": fields
     }
 
 async def add_download_client(app_url: str, app_api_key: str, payload: dict, api_version: str = "v3"):
