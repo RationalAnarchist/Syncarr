@@ -7,30 +7,46 @@ def build_qbittorrent_payload(client_config, target_app_type: str = ""):
     """
     Build the payload for qBittorrent download client.
     """
+    fields = [
+        {
+            "name": "host",
+            "value": client_config.get("host", "localhost")
+        },
+        {
+            "name": "port",
+            "value": client_config.get("port", 8080)
+        },
+        {
+            "name": "username",
+            "value": client_config.get("username", "")
+        },
+        {
+            "name": "password",
+            "value": client_config.get("password", "")
+        }
+    ]
+
+    # Dynamically inject required category fields based on the target Servarr app
+    # This prevents the "Object reference not set" on some apps and "missing category" on others
+    if target_app_type == 'sonarr':
+        fields.append({"name": "tvCategory", "value": "Series"})
+    elif target_app_type == 'radarr':
+        fields.append({"name": "movieCategory", "value": "Movies"})
+    elif target_app_type == 'lidarr':
+        fields.append({"name": "musicCategory", "value": "Music"})
+    elif target_app_type == 'readarr':
+        # Readarr requires either tvCategory or category or booksCategory depending on version. Usually 'category' for qbit.
+        fields.append({"name": "category", "value": "Books"})
+    elif target_app_type == 'prowlarr':
+        fields.append({"name": "category", "value": ""})
+
     return {
         "enable": True,
         "name": "qBittorrent",
         "implementation": "QBittorrent",
         "configContract": "QBittorrentSettings",
         "priority": 1,
-        "fields": [
-            {
-                "name": "host",
-                "value": client_config.get("host", "localhost")
-            },
-            {
-                "name": "port",
-                "value": client_config.get("port", 8080)
-            },
-            {
-                "name": "username",
-                "value": client_config.get("username", "")
-            },
-            {
-                "name": "password",
-                "value": client_config.get("password", "")
-            }
-        ]
+        "fields": fields
     }
 
 def build_nzbget_payload(client_config, target_app_type: str = ""):
@@ -56,13 +72,20 @@ def build_nzbget_payload(client_config, target_app_type: str = ""):
         }
     ]
 
-    # Only add tvCategory if the target is NOT Sonarr, as Sonarr enforces existence
-    # Alternatively, if we know target_app_type is Radarr/Readarr/Lidarr, we could add specific categories.
-    # Sonarr: tvCategory, Radarr: movieCategory. But to avoid "category doesn't exist" errors,
-    # it is often safer to leave them blank unless the user created them, or use the app's default category name.
-    # We will exclude category fields by default or just use empty string so the Servarr apps don't throw validation errors.
-
-    # Adding tvCategory with empty string or not adding it might bypass the validation.
+    # Dynamically inject required category fields based on the target Servarr app
+    # The user confirmed NZBGet has: Movies, Series, Music, Software
+    if target_app_type == 'sonarr':
+        fields.append({"name": "tvCategory", "value": "Series"})
+    elif target_app_type == 'radarr':
+        fields.append({"name": "movieCategory", "value": "Movies"})
+    elif target_app_type == 'lidarr':
+        fields.append({"name": "musicCategory", "value": "Music"})
+    elif target_app_type == 'readarr':
+        # User confirmed 'Software' is an available category
+        fields.append({"name": "category", "value": "Software"})
+        fields.append({"name": "tvCategory", "value": "Software"}) # Sometimes Readarr uses tvCategory in schema for NZBGet
+    elif target_app_type == 'prowlarr':
+        fields.append({"name": "category", "value": ""})
 
     return {
         "enable": True,

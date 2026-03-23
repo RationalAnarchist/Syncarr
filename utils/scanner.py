@@ -76,7 +76,13 @@ def parse_qbittorrent_config(filepath):
                     elif key == r"WebUI\Username":
                         config_data["Username"] = val
                     elif key == r"WebUI\Password_PBKDF2":
-                        config_data["Password"] = val
+                        # We only check for the presence of the hash to determine if setup is complete.
+                        # Do not populate 'Password' with the hash, as the frontend/linking payload
+                        # will incorrectly attempt to use it as plaintext auth for APIs.
+                        config_data["HasPassword"] = True
+
+        # Ensure we don't return the hash as the password
+        config_data["Password"] = ""
 
         if "Port" not in config_data:
             config_data["Port"] = "8080"
