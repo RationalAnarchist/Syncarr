@@ -247,31 +247,114 @@ async def setup_app(request: SetupAppRequest):
         raise HTTPException(status_code=404, detail=f"App with given API key not found.")
 
     filepath = app_config['path']
-    try:
-        tree = ET.parse(filepath)
-        root = tree.getroot()
+    app_type = app_config['app'].lower()
 
-        # Helper to update or add element
-        def update_or_add(tag, text):
-            elem = root.find(tag)
-            if elem is None:
-                elem = ET.SubElement(root, tag)
-            elem.text = text
+    if app_type == 'nzbget':
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
 
-        if request.auth_method is not None:
-            update_or_add("AuthenticationMethod", request.auth_method)
-            if request.auth_method != "None":
-                if request.auth_required is not None:
-                    update_or_add("AuthenticationRequired", request.auth_required)
-                if request.username is not None:
-                    update_or_add("Username", request.username)
-                if request.password is not None:
-                    update_or_add("Password", request.password)
+            username_updated = False
+            password_updated = False
+            for i, line in enumerate(lines):
+                if line.startswith("ControlUsername="):
+                    lines[i] = f"ControlUsername={request.username}\n"
+                    username_updated = True
+                elif line.startswith("ControlPassword="):
+                    lines[i] = f"ControlPassword={request.password}\n"
+                    password_updated = True
 
-        tree.write(filepath, encoding="utf-8", xml_declaration=False)
-    except Exception as e:
-        logger.error(f"Failed to update config.xml: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update config.xml: {e}")
+            if not username_updated:
+                lines.append(f"ControlUsername={request.username}\n")
+            if not password_updated:
+                lines.append(f"ControlPassword={request.password}\n")
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+        except Exception as e:
+            logger.error(f"Failed to update nzbget.conf: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to update nzbget.conf: {e}")
+
+        # Return early since NZBGet setup is just config file write, no API restart mechanism via Syncarr yet
+        return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
+
+    elif app_type == 'qbittorrent':
+        try:
+            import os
+            import hashlib
+            import base64
+
+            salt = os.urandom(16)
+            key = hashlib.pbkdf2_hmac('sha512', request.password.encode('utf-8'), salt, 100000, 64)
+            pbkdf2_hash = f"@ByteArray({base64.b64encode(salt).decode('utf-8')}:{base64.b64encode(key).decode('utf-8')})"
+
+            with open(filepath, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            username_updated = False
+            password_updated = False
+            preferences_section_idx = -1
+
+            for i, line in enumerate(lines):
+                if line.strip() == "[Preferences]":
+                    preferences_section_idx = i
+                elif line.startswith(r"WebUI\Username="):
+                    lines[i] = f"WebUI\\Username={request.username}\n"
+                    username_updated = True
+                elif line.startswith(r"WebUI\Password_PBKDF2="):
+                    lines[i] = f"WebUI\\Password_PBKDF2={pbkdf2_hash}\n"
+                    password_updated = True
+
+            # If not updated, we need to inject them under [Preferences]
+            if not username_updated or not password_updated:
+                if preferences_section_idx == -1:
+                    # If [Preferences] doesn't exist, append it
+                    lines.append("\n[Preferences]\n")
+                    preferences_section_idx = len(lines) - 1
+
+                # Insert right after [Preferences] section
+                if not password_updated:
+                    lines.insert(preferences_section_idx + 1, f"WebUI\\Password_PBKDF2={pbkdf2_hash}\n")
+                if not username_updated:
+                    lines.insert(preferences_section_idx + 1, f"WebUI\\Username={request.username}\n")
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+        except Exception as e:
+            logger.error(f"Failed to update qbittorrent.conf: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to update qbittorrent.conf: {e}")
+
+        return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
+
+    else:
+        try:
+            tree = ET.parse(filepath)
+            root = tree.getroot()
+
+            # Helper to update or add element
+            def update_or_add(tag, text):
+                elem = root.find(tag)
+                if elem is None:
+                    elem = ET.SubElement(root, tag)
+                elem.text = text
+
+            if request.auth_method is not None:
+                update_or_add("AuthenticationMethod", request.auth_method)
+                if request.auth_method != "None":
+                    if request.auth_required is not None:
+                        update_or_add("AuthenticationRequired", request.auth_required)
+                    if request.username is not None:
+                        update_or_add("Username", request.username)
+                    if request.password is not None:
+                        update_or_add("Password", request.password)
+
+            tree.write(filepath, encoding="utf-8", xml_declaration=False)
+        except Exception as e:
+            logger.error(f"Failed to update config.xml: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to update config.xml: {e}")
+
+    if app_type in ['nzbget', 'qbittorrent']:
+        return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
 
     app_ip = request.host
     app_port = app_config['port']
@@ -454,6 +537,18 @@ async def discover_apps():
                     logger.debug(f"Failed to connect to {app_name} at {app_url} to check root folders: {e}")
 
                 app['isSetupComplete'] = is_auth_configured and has_root_folders
+
+        elif app_name == 'nzbget':
+            if app.get('username') == 'nzbget' and app.get('password') == 'tegbzn6789':
+                app['isSetupComplete'] = False
+            else:
+                app['isSetupComplete'] = True
+
+        elif app_name == 'qbittorrent':
+            if not app.get('password'):
+                app['isSetupComplete'] = False
+            else:
+                app['isSetupComplete'] = True
 
     return JSONResponse(content={"status": "success", "data": discovered_apps})
 
