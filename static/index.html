@@ -557,6 +557,13 @@
         let prowlarrLinkedKeys = [];
         let allDiscoveredApps = [];
         let appHostnames = {};
+        let appLinkPasswords = {};
+
+        function handleLinkPasswordChange(appId, value) {
+            if (appId) {
+                appLinkPasswords[appId] = value;
+            }
+        }
 
         function toggleCardCollapse(appId) {
             const bodyEl = document.getElementById(`card-body-${appId}`);
@@ -937,7 +944,7 @@
                                 ${['qbittorrent', 'nzbget'].includes(appData.app.toLowerCase()) ? `
                                 <div>
                                     <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider flex items-center">Password for Linking <span title="Required for Sonarr/Radarr API linking since passwords cannot be securely extracted from config files. Not stored." class="ml-1 cursor-help text-gray-400 hover:text-white">ⓘ</span></label>
-                                    <input type="password" id="link-password-${appId}" onclick="event.stopPropagation()" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan" placeholder="Password (if enabled)">
+                                    <input type="password" id="link-password-${appId}" oninput="handleLinkPasswordChange('${appId}', this.value)" onclick="event.stopPropagation()" value="${appLinkPasswords[appId] || ''}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan" placeholder="Password (if enabled)">
                                 </div>
                                 ` : ''}
 
