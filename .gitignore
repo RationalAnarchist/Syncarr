@@ -4,3 +4,5 @@ __pycache__/
 /home/jules/verification/
 backups/
 settings.json
+test_configs/nzbget/nzbget.conf
+test_configs/qbittorrent/qbittorrent.conf

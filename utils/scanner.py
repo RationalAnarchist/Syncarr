@@ -75,8 +75,14 @@ def parse_qbittorrent_config(filepath):
                         config_data["Port"] = val
                     elif key == r"WebUI\Username":
                         config_data["Username"] = val
-                    elif key == r"WebUI\Password_PBKDF2":
-                        config_data["Password"] = val
+                    elif key.startswith(r"WebUI\Password"):
+                        # We only check for the presence of the hash to determine if setup is complete.
+                        # Do not populate 'Password' with the hash, as the frontend/linking payload
+                        # will incorrectly attempt to use it as plaintext auth for APIs.
+                        config_data["HasPassword"] = True
+
+        # Ensure we don't return the hash as the password
+        config_data["Password"] = ""
 
         if "Port" not in config_data:
             config_data["Port"] = "8080"
@@ -199,7 +205,8 @@ def scan_configs(base_dir):
                         "linkedApiKeys": config_data.get("LinkedApiKeys", []),
                         "authMethod": config_data.get("AuthenticationMethod"),
                         "username": config_data.get("Username", ""),
-                        "password": config_data.get("Password", "")
+                        "password": config_data.get("Password", ""),
+                        "HasPassword": config_data.get("HasPassword", False)
                     })
             elif file.lower() == 'qbittorrent.conf':
                 filepath = os.path.join(root, file)
@@ -219,7 +226,8 @@ def scan_configs(base_dir):
                         "linkedApiKeys": config_data.get("LinkedApiKeys", []),
                         "authMethod": config_data.get("AuthenticationMethod"),
                         "username": config_data.get("Username", ""),
-                        "password": config_data.get("Password", "")
+                        "password": config_data.get("Password", ""),
+                        "HasPassword": config_data.get("HasPassword", False)
                     })
             elif file.lower() == 'settings.json':
                 filepath = os.path.join(root, file)

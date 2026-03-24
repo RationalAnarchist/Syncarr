@@ -3,73 +3,105 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def build_qbittorrent_payload(client_config):
+def build_qbittorrent_payload(client_config, target_app_type: str = ""):
     """
     Build the payload for qBittorrent download client.
     """
+    fields = [
+        {
+            "name": "host",
+            "value": client_config.get("host", "localhost")
+        },
+        {
+            "name": "port",
+            "value": client_config.get("port", 8080)
+        },
+        {
+            "name": "username",
+            "value": client_config.get("username", "")
+        },
+        {
+            "name": "password",
+            "value": client_config.get("password", "")
+        }
+    ]
+
+    # Dynamically inject required category fields based on the target Servarr app
+    # This prevents the "Object reference not set" on some apps and "missing category" on others
+    if target_app_type == 'sonarr':
+        fields.append({"name": "tvCategory", "value": "Series"})
+    elif target_app_type == 'radarr':
+        fields.append({"name": "movieCategory", "value": "Movies"})
+    elif target_app_type == 'lidarr':
+        fields.append({"name": "musicCategory", "value": "Music"})
+    elif target_app_type == 'readarr':
+        # Readarr requires either tvCategory or category or booksCategory depending on version. Usually 'category' for qbit.
+        fields.append({"name": "category", "value": "Books"})
+    elif target_app_type == 'prowlarr':
+        fields.append({"name": "tvCategory", "value": "tv"}) # Prowlarr errors on empty category
+
     return {
         "enable": True,
         "name": "qBittorrent",
         "implementation": "QBittorrent",
         "configContract": "QBittorrentSettings",
-        "fields": [
-            {
-                "name": "host",
-                "value": client_config.get("host", "localhost")
-            },
-            {
-                "name": "port",
-                "value": client_config.get("port", 8080)
-            },
-            {
-                "name": "username",
-                "value": client_config.get("username", "")
-            },
-            {
-                "name": "password",
-                "value": client_config.get("password", "")
-            }
-        ]
+        "priority": 1,
+        "fields": fields
     }
 
-def build_nzbget_payload(client_config):
+def build_nzbget_payload(client_config, target_app_type: str = ""):
     """
     Build the payload for NZBGet download client.
     """
+    fields = [
+        {
+            "name": "host",
+            "value": client_config.get("host", "localhost")
+        },
+        {
+            "name": "port",
+            "value": client_config.get("port", 6789)
+        },
+        {
+            "name": "username",
+            "value": client_config.get("username", "")
+        },
+        {
+            "name": "password",
+            "value": client_config.get("password", "")
+        }
+    ]
+
+    # Dynamically inject required category fields based on the target Servarr app
+    # The user confirmed NZBGet has: Movies, Series, Music, Software
+    if target_app_type == 'sonarr':
+        fields.append({"name": "tvCategory", "value": "Series"})
+    elif target_app_type == 'radarr':
+        fields.append({"name": "movieCategory", "value": "Movies"})
+    elif target_app_type == 'lidarr':
+        fields.append({"name": "musicCategory", "value": "Music"})
+    elif target_app_type == 'readarr':
+        # User confirmed 'Software', 'Music' etc are available. Readarr validates 'MusicCategory' too.
+        fields.append({"name": "category", "value": "Software"})
+        fields.append({"name": "tvCategory", "value": "Software"})
+        fields.append({"name": "musicCategory", "value": "Music"})
+    elif target_app_type == 'prowlarr':
+        fields.append({"name": "tvCategory", "value": "Software"}) # Prowlarr errors on empty category
+
     return {
         "enable": True,
         "name": "NZBGet",
         "implementation": "Nzbget",
         "configContract": "NzbgetSettings",
-        "fields": [
-            {
-                "name": "host",
-                "value": client_config.get("host", "localhost")
-            },
-            {
-                "name": "port",
-                "value": client_config.get("port", 6789)
-            },
-            {
-                "name": "username",
-                "value": client_config.get("username", "")
-            },
-            {
-                "name": "password",
-                "value": client_config.get("password", "")
-            },
-            {
-                "name": "tvCategory",
-                "value": client_config.get("category", "tv")
-            }
-        ]
+        "priority": 1,
+        "fields": fields
     }
 
-async def add_download_client(app_url: str, app_api_key: str, payload: dict):
+async def add_download_client(app_url: str, app_api_key: str, payload: dict, api_version: str = "v3"):
     """
     Add a download client to a Servarr instance.
     """
-    url = f"{app_url}/api/v3/downloadclient"
+    url = f"{app_url}/api/{api_version}/downloadclient"
     headers = {"X-Api-Key": app_api_key}
 
     async with httpx.AsyncClient() as client:

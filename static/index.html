@@ -437,6 +437,79 @@
             }
         }
 
+        async function linkDownloaders(targetApiKey = null) {
+            let qbitConfig = null;
+            let nzbgetConfig = null;
+            let hasSelection = false;
+
+            const targetApps = [];
+            if (targetApiKey) {
+                targetApps.push(targetApiKey);
+            }
+
+            Array.from(selectedApps).forEach(key => {
+                const appData = allDiscoveredApps.find(a => (a.apiKey || btoa(encodeURIComponent(a.path)).replace(/[^a-zA-Z0-9]/g, '')) === key);
+                if (!appData) return;
+
+                if (appData.app.toLowerCase() === 'qbittorrent') {
+                    const hostInput = document.getElementById('hostname-' + key);
+                    const passwordInput = document.getElementById('link-password-' + key);
+                    qbitConfig = {
+                        host: hostInput ? hostInput.value.trim() || 'localhost' : 'localhost',
+                        port: appData.port,
+                        username: appData.username || '',
+                        password: passwordInput && passwordInput.value ? passwordInput.value : (appData.password || '')
+                    };
+                    hasSelection = true;
+                } else if (appData.app.toLowerCase() === 'nzbget') {
+                    const hostInput = document.getElementById('hostname-' + key);
+                    const passwordInput = document.getElementById('link-password-' + key);
+                    nzbgetConfig = {
+                        host: hostInput ? hostInput.value.trim() || 'localhost' : 'localhost',
+                        port: appData.port,
+                        username: appData.username || '',
+                        password: passwordInput && passwordInput.value ? passwordInput.value : (appData.password || '')
+                    };
+                    hasSelection = true;
+                }
+            });
+
+            if (!hasSelection) {
+                showToast('Info', 'Please select at least one Download Client (QBittorrent or NZBGet) to link.', false);
+                return;
+            }
+
+            try {
+                const payload = {
+                    apps_to_link: targetApps
+                };
+                if (qbitConfig) payload.qbittorrent = qbitConfig;
+                if (nzbgetConfig) payload.nzbget = nzbgetConfig;
+
+                const response = await fetch('/api/link/downloaders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to link Downloaders.');
+                }
+
+                if (data.status === 'success') {
+                    showToast('Linked Successfully', 'Download clients have been linked with selected apps.');
+                } else if (data.status === 'partial_success') {
+                    showToast('Partial Success', 'Linked to some apps, but others failed.', true);
+                } else {
+                    showToast('Link Failed', 'Failed to link any apps to Downloaders.', true);
+                }
+            } catch (err) {
+                showToast('Error', err.message, true);
+            }
+        }
+
         async function triggerBackup() {
             const backupBtn = document.getElementById('backupBtn');
             const originalContent = backupBtn.innerHTML;
@@ -484,6 +557,13 @@
         let prowlarrLinkedKeys = [];
         let allDiscoveredApps = [];
         let appHostnames = {};
+        let appLinkPasswords = {};
+
+        function handleLinkPasswordChange(appId, value) {
+            if (appId) {
+                appLinkPasswords[appId] = value;
+            }
+        }
 
         function toggleCardCollapse(appId) {
             const bodyEl = document.getElementById(`card-body-${appId}`);
@@ -655,8 +735,9 @@
             const accentColor = getAppColor(appData.app);
             const urlBaseDisplay = appData.urlBase ? appData.urlBase : '/';
 
-            const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase());
+            const isSelectable = ['sonarr', 'radarr', 'lidarr', 'readarr', 'qbittorrent', 'nzbget'].includes(appData.app.toLowerCase());
             const isSetupSupported = ['sonarr', 'radarr', 'lidarr', 'readarr', 'prowlarr', 'nzbget', 'qbittorrent'].includes(appData.app.toLowerCase());
+            const openLink = `http://${appData.hostname || appHostnames[appId] || 'localhost'}:${appData.port}${urlBaseDisplay === '/' ? '' : urlBaseDisplay}`;
             const isSelected = selectedApps.has(appId);
             const isCollapsed = collapsedCards.has(appId);
 
@@ -691,10 +772,33 @@
             }
 
             let linkButton = '';
-            if (appData.app.toLowerCase() === 'prowlarr') {
+            if (['sonarr', 'radarr', 'lidarr', 'readarr'].includes(appData.app.toLowerCase())) {
+                linkButton = `
+                    <div class="mt-4 pt-4 border-t border-gray-700">
+                        <button onclick="linkDownloaders('${appData.apiKey}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            Link Selected Download Clients
+                        </button>
+                    </div>
+                `;
+            } else if (['qbittorrent', 'nzbget'].includes(appData.app.toLowerCase())) {
+                linkButton = `
+                    <div class="mt-4 pt-4 border-t border-gray-700">
+                        <button onclick="linkDownloaders()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition text-sm flex items-center justify-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            Link to All Supported Apps
+                        </button>
+                    </div>
+                `;
+            } else if (appData.app.toLowerCase() === 'prowlarr') {
                 const prowlarrPort = appData.port || 9696;
                 linkButton = `
                     <div class="mt-4 pt-4 border-t border-gray-700">
+                        <button onclick="linkDownloaders('${appData.apiKey}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 mb-3 rounded-md font-medium transition text-sm flex items-center justify-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            Link Selected Download Clients
+                        </button>
+                        <div class="h-px bg-gray-700 my-3"></div>
                         <div class="flex space-x-2 mb-3 pt-2">
                             <div class="w-full">
                                 <label for="port-prowlarr" class="block text-xs font-medium text-gray-400 mb-1">Port</label>
@@ -812,6 +916,9 @@
                             <select onclick="event.stopPropagation()" onchange="handleAppTypeChange('${appData.path}', this.value)" class="text-xl font-bold text-white bg-transparent border-none appearance-none cursor-pointer focus:outline-none focus:ring-0">
                                 ${selectOptions}
                             </select>
+                            <a href="${openLink}" target="_blank" onclick="event.stopPropagation()" class="ml-2 text-gray-400 hover:text-white transition" title="Open App">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                            </a>
                             ${linkedBadge}
                             <div class="ml-auto flex items-center space-x-2">
                                 <span class="px-2.5 py-1 bg-gray-800 text-xs font-medium rounded text-gray-300 border border-gray-700">Port ${appData.port}</span>
@@ -833,6 +940,13 @@
                                         <code class="text-sm text-gray-300 font-mono truncate flex-1">${appData.apiKey || 'Not found'}</code>
                                     </div>
                                 </div>
+
+                                ${['qbittorrent', 'nzbget'].includes(appData.app.toLowerCase()) ? `
+                                <div>
+                                    <label class="text-xs text-gray-500 uppercase font-semibold tracking-wider flex items-center">Password for Linking <span title="Required for Sonarr/Radarr API linking since passwords cannot be securely extracted from config files. Not stored." class="ml-1 cursor-help text-gray-400 hover:text-white">ⓘ</span></label>
+                                    <input type="password" id="link-password-${appId}" oninput="handleLinkPasswordChange('${appId}', this.value)" onclick="event.stopPropagation()" value="${appLinkPasswords[appId] || ''}" class="mt-1 w-full bg-gray-900 text-sm text-gray-300 rounded border border-gray-700 p-2 focus:outline-none focus:border-servarrCyan focus:ring-1 focus:ring-servarrCyan" placeholder="Password (if enabled)">
+                                </div>
+                                ` : ''}
 
                                 <div class="flex items-center justify-between">
                                     <div>
