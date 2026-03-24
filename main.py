@@ -355,6 +355,15 @@ async def setup_app(request: SetupAppRequest):
             raise HTTPException(status_code=500, detail=f"Failed to update config.xml: {e}")
 
     if app_type in ['nzbget', 'qbittorrent']:
+        # Securely store plaintext credentials on the backend so they can be injected during linking
+        settings = load_settings()
+        if "app_credentials" not in settings:
+            settings["app_credentials"] = {}
+        settings["app_credentials"][filepath] = {
+            "username": request.username,
+            "password": request.password
+        }
+        save_settings_dict(settings)
         return JSONResponse(content={"status": "success", "message": "App setup updated successfully."})
 
     app_ip = request.host
@@ -605,6 +614,9 @@ async def link_prowlarr(request: LinkProwlarrRequest):
     results = []
     errors = []
 
+    settings = load_settings()
+    app_credentials = settings.get("app_credentials", {})
+
     for app in discovered_apps:
         app_name = app['app']
 
@@ -815,7 +827,16 @@ async def link_downloaders(request: LinkDownloadersRequest):
             if request.qbittorrent:
                 logger.debug(f"Attempting to link qBittorrent to {app_name}")
                 try:
-                    payload = build_qbittorrent_payload(request.qbittorrent.model_dump(), app_name.lower())
+                    qbit_data = request.qbittorrent.model_dump()
+                    qbit_app = next((a for a in discovered_apps if a['app'].lower() == 'qbittorrent'), None)
+                    if qbit_app:
+                        creds = app_credentials.get(qbit_app['path'], {})
+                        if not qbit_data.get('username'):
+                            qbit_data['username'] = creds.get('username', qbit_app.get('username', ''))
+                        if not qbit_data.get('password'):
+                            qbit_data['password'] = creds.get('password', '')
+
+                    payload = build_qbittorrent_payload(qbit_data, app_name.lower())
                     result = await add_download_client(
                         app_url=app_url,
                         app_api_key=app_api_key,
@@ -834,7 +855,16 @@ async def link_downloaders(request: LinkDownloadersRequest):
             if request.nzbget:
                 logger.debug(f"Attempting to link NZBGet to {app_name}")
                 try:
-                    payload = build_nzbget_payload(request.nzbget.model_dump(), app_name.lower())
+                    nzbget_data = request.nzbget.model_dump()
+                    nzbget_app = next((a for a in discovered_apps if a['app'].lower() == 'nzbget'), None)
+                    if nzbget_app:
+                        creds = app_credentials.get(nzbget_app['path'], {})
+                        if not nzbget_data.get('username'):
+                            nzbget_data['username'] = creds.get('username', nzbget_app.get('username', ''))
+                        if not nzbget_data.get('password'):
+                            nzbget_data['password'] = creds.get('password', '')
+
+                    payload = build_nzbget_payload(nzbget_data, app_name.lower())
 
                     result = await add_download_client(
                         app_url=app_url,

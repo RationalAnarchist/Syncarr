@@ -75,7 +75,7 @@ def parse_qbittorrent_config(filepath):
                         config_data["Port"] = val
                     elif key == r"WebUI\Username":
                         config_data["Username"] = val
-                    elif key == r"WebUI\Password_PBKDF2":
+                    elif key.startswith(r"WebUI\Password"):
                         # We only check for the presence of the hash to determine if setup is complete.
                         # Do not populate 'Password' with the hash, as the frontend/linking payload
                         # will incorrectly attempt to use it as plaintext auth for APIs.
