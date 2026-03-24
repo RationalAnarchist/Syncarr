@@ -614,9 +614,6 @@ async def link_prowlarr(request: LinkProwlarrRequest):
     results = []
     errors = []
 
-    settings = load_settings()
-    app_credentials = settings.get("app_credentials", {})
-
     for app in discovered_apps:
         app_name = app['app']
 
@@ -798,6 +795,9 @@ async def link_downloaders(request: LinkDownloadersRequest):
 
     results = []
     errors = []
+
+    settings = load_settings()
+    app_credentials = settings.get("app_credentials", {})
 
     for app in discovered_apps:
         app_name = app['app']
